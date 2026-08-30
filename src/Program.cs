@@ -32,6 +32,11 @@ namespace DMToCSharp
                 return RunBuiltinTests();
             }
 
+            if (command == "app" || command == "gui" || command == "play" || command == "game")
+            {
+                return RunDesktopApp();
+            }
+
             if (command == "server" || command == "tgui")
             {
                 int port = 8080;
@@ -436,6 +441,17 @@ namespace DMToCSharp
             Console.WriteLine("================================================================================");
 
             return passed == total ? 0 : 1;
+        }
+
+        private static int RunDesktopApp()
+        {
+            Console.WriteLine("================================================================================");
+            Console.WriteLine(" Space Station 13 - Launching Native Desktop Game Client (.NET)");
+            Console.WriteLine("================================================================================");
+            System.Windows.Forms.Application.EnableVisualStyles();
+            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+            System.Windows.Forms.Application.Run(new Runtime.UI.SS13DesktopApp());
+            return 0;
         }
 
         private static int RunTGUIServer(int port)

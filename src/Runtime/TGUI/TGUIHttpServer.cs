@@ -78,6 +78,9 @@ namespace DMToCSharp.Runtime.TGUI
             SSPower.Instance.RegisterAPC(StationAPC);
             SSPower.Instance.RegisterSMES(StationSMES);
 
+            // Initialize Station Grid & Rooms
+            InitializeDefaultStationMap();
+
             // Register Light Source on Player Mob
             if (LocalPlayer.Mob != null)
             {
@@ -88,6 +91,67 @@ namespace DMToCSharp.Runtime.TGUI
             SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, "Welcome to Space Station 13 (.NET Runtime). All subsystems online.");
             SSRadio.Instance.Broadcast("Chief Medical Officer", "Medical", SSRadio.FREQ_MEDICAL, "Medbay triage active and stocked.");
             SSRadio.Instance.Broadcast("Head of Security", "Security", SSRadio.FREQ_SECURITY, "Station security level set to Code Green.");
+        }
+
+        private void InitializeDefaultStationMap()
+        {
+            var grid = DMSpatialGrid.Instance;
+            if (grid.GetTurf(2, 2, 1) != null) return;
+
+            int size = 16;
+            for (int y = 1; y <= size; y++)
+            {
+                for (int x = 1; x <= size; x++)
+                {
+                    bool isOuterWall = (x == 1 || x == size || y == 1 || y == size);
+                    bool isInternalWall = (x == 8 && y != 8 && y != 9) || (y == 8 && x != 8 && x != 9);
+                    bool isAirlock = (x == 8 && (y == 8 || y == 9)) || (y == 8 && (x == 8 || x == 9));
+
+                    var turf = new DM_turf();
+                    turf.x = new DMValue(x);
+                    turf.y = new DMValue(y);
+                    turf.z = new DMValue(1);
+
+                    if (isOuterWall || isInternalWall)
+                    {
+                        turf.name = new DMValue("reinforced wall");
+                        turf.density = new DMValue(true);
+                        turf.opacity = new DMValue(true);
+                    }
+                    else
+                    {
+                        turf.name = new DMValue("station floor");
+                        turf.density = new DMValue(false);
+                        turf.opacity = new DMValue(false);
+
+                        if (isAirlock)
+                        {
+                            var door = new DM_obj();
+                            door.name = new DMValue("secure airlock");
+                            door.density = new DMValue(false);
+                            door.SetVar("bolted", new DMValue(false));
+                            door.SetVar("opened", new DMValue(false));
+                            turf.contents.Add(new DMValue(door));
+                        }
+                    }
+
+                    grid.SetTurf(x, y, 1, turf);
+                }
+            }
+
+            // Spawn player in Bridge at (4, 12, 1)
+            if (LocalPlayer.Mob != null)
+            {
+                LocalPlayer.Mob.x = new DMValue(4);
+                LocalPlayer.Mob.y = new DMValue(12);
+                LocalPlayer.Mob.z = new DMValue(1);
+                var spawnTurf = grid.GetTurf(4, 12, 1);
+                if (spawnTurf != null)
+                {
+                    LocalPlayer.Mob.loc = new DMValue(spawnTurf);
+                    spawnTurf.contents.Add(new DMValue(LocalPlayer.Mob));
+                }
+            }
         }
 
         public void Start()
@@ -201,6 +265,36 @@ namespace DMToCSharp.Runtime.TGUI
             }
         }
 
+        private void SendJsonResponse(HttpListenerContext ctx, string json)
+        {
+            try
+            {
+                byte[] data = Encoding.UTF8.GetBytes(json);
+                ctx.Response.ContentType = "application/json; charset=utf-8";
+                ctx.Response.ContentLength64 = data.Length;
+                ctx.Response.StatusCode = 200;
+                ctx.Response.OutputStream.Write(data, 0, data.Length);
+                ctx.Response.OutputStream.Flush();
+                ctx.Response.Close();
+            }
+            catch { }
+        }
+
+        private void SendHtmlResponse(HttpListenerContext ctx, string html)
+        {
+            try
+            {
+                byte[] data = Encoding.UTF8.GetBytes(html);
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                ctx.Response.ContentLength64 = data.Length;
+                ctx.Response.StatusCode = 200;
+                ctx.Response.OutputStream.Write(data, 0, data.Length);
+                ctx.Response.OutputStream.Flush();
+                ctx.Response.Close();
+            }
+            catch { }
+        }
+
         private void HandleGameMode(HttpListenerContext ctx)
         {
             var mode = SSGameMode.Instance;
@@ -218,10 +312,7 @@ namespace DMToCSharp.Runtime.TGUI
 
             string json = string.Format("{{\"mode\":\"{0}\",\"stage\":\"{1}\",\"time\":{2},\"antags\":[{3}]}}",
                 mode.ModeName, mode.Stage, mode.RoundTimeSeconds, string.Join(",", antags.ToArray()));
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendJsonResponse(ctx, json);
         }
 
         private void HandleDatabasePlayers(HttpListenerContext ctx)
@@ -234,10 +325,7 @@ namespace DMToCSharp.Runtime.TGUI
                     p.CKey, p.CharacterName, p.PreferredJob, p.RoundsPlayed, p.Karma));
             }
             string json = string.Format("[{0}]", string.Join(",", list.ToArray()));
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendJsonResponse(ctx, json);
         }
 
         private void HandleAiLaws(HttpListenerContext ctx)
@@ -249,10 +337,7 @@ namespace DMToCSharp.Runtime.TGUI
                 lawJson.Add(string.Format("\"{0}\"", l.Replace("\"", "\\\"")));
             }
             string json = string.Format("{{\"preset\":\"{0}\",\"laws\":[{1}]}}", StationAI.Laws.Name, string.Join(",", lawJson.ToArray()));
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendJsonResponse(ctx, json);
         }
 
         private void HandleAiSetPreset(HttpListenerContext ctx)
@@ -281,10 +366,7 @@ namespace DMToCSharp.Runtime.TGUI
             }
 
             string json = string.Format("[{0}]", string.Join(",", jsonMsgs.ToArray()));
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendJsonResponse(ctx, json);
         }
 
         private void HandleRadioSend(HttpListenerContext ctx)
@@ -316,10 +398,7 @@ namespace DMToCSharp.Runtime.TGUI
                 LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1,
                 LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1);
 
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendJsonResponse(ctx, json);
         }
 
         private void HandleApiStatus(HttpListenerContext ctx)
@@ -383,10 +462,7 @@ namespace DMToCSharp.Runtime.TGUI
                 SSGameMode.Instance.RoundTimeSeconds
             );
 
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendJsonResponse(ctx, json);
         }
 
         private void HandleApiMapTiles(HttpListenerContext ctx)
@@ -445,10 +521,7 @@ namespace DMToCSharp.Runtime.TGUI
 
             string json = string.Format("{{\"width\":{0},\"height\":{1},\"player_x\":{2},\"player_y\":{3},\"tiles\":[{4}]}}",
                 maxX, maxY, pX, pY, string.Join(",", tileJsonList.ToArray()));
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendJsonResponse(ctx, json);
         }
 
         private void HandleApiAct(HttpListenerContext ctx)
@@ -1106,10 +1179,7 @@ namespace DMToCSharp.Runtime.TGUI
 </body>
 </html>";
 
-            byte[] data = Encoding.UTF8.GetBytes(html);
-            ctx.Response.ContentType = "text/html; charset=utf-8";
-            ctx.Response.OutputStream.Write(data, 0, data.Length);
-            ctx.Response.Close();
+            SendHtmlResponse(ctx, html);
         }
     }
 }

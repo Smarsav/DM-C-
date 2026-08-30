@@ -14,7 +14,7 @@ if (-not (Test-Path $csc)) {
 
 $sources = Get-ChildItem -Path "src" -Recurse -Filter "*.cs" | ForEach-Object { $_.FullName }
 
-& $csc /nologo /target:exe /out:bin\DMToCSharp.exe $sources
+& $csc /nologo /target:exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:bin\DMToCSharp.exe $sources
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[Build Success] Output: bin\DMToCSharp.exe" -ForegroundColor Green
