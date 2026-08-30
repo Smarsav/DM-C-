@@ -5,6 +5,10 @@
 *.dll
 *.pdb
 
+# External cloned game repositories
+psychonaut_station/
+external/
+
 # Generated test binaries
 tests/**/*.exe
 tests/**/*.pdb
