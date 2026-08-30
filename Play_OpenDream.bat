@@ -4,21 +4,24 @@ echo ======================================================================
 echo  Launching OpenDream (.NET 9 C# Space Station 13 Engine)
 echo ======================================================================
 
-set COMPILER=OpenDream\DMCompiler\bin\Release\net5.0\DMCompiler.exe
-set SERVER=OpenDream\OpenDreamServer\bin\Release\net5.0\OpenDreamServer.exe
-set CLIENT=OpenDream\OpenDreamClient\bin\Release\net5.0-windows\OpenDreamClient.exe
+set DOTNET=%LocalAppData%\Microsoft\dotnet\dotnet.exe
+if not exist "%DOTNET%" set DOTNET=dotnet
 
-echo [1/3] Compiling test environment...
-"%COMPILER%" "OpenDream\TestGame\environment.dme"
+set COMPILER_DLL=%~dp0OpenDream\DMCompiler\bin\Release\net5.0\DMCompiler.dll
+set SERVER_DLL=%~dp0OpenDream\OpenDreamServer\bin\Release\net5.0\OpenDreamServer.dll
+set CLIENT_DLL=%~dp0OpenDream\OpenDreamClient\bin\Release\net5.0-windows\OpenDreamClient.dll
+
+echo [1/3] Compiling station environment...
+"%DOTNET%" exec --roll-forward LatestMajor "%COMPILER_DLL%" "%~dp0OpenDream\TestGame\environment.dme"
 
 echo [2/3] Starting OpenDream C# Server (port 25566)...
-start "OpenDream Game Server" "%SERVER%" "OpenDream\TestGame\environment.json"
+start "OpenDream Server" "%DOTNET%" exec --roll-forward LatestMajor "%SERVER_DLL%" "%~dp0OpenDream\TestGame\environment.json"
 
 ping -n 3 127.0.0.1 >nul
 
 echo [3/3] Launching OpenDream C# Client Window...
-start "OpenDream Client" "%CLIENT%"
+start "OpenDream Client" "%DOTNET%" exec --roll-forward LatestMajor "%CLIENT_DLL%"
 
 echo ======================================================================
-echo  OpenDream SS13 is running!
+echo  OpenDream SS13 is active! (Connect to 127.0.0.1:25566)
 echo ======================================================================

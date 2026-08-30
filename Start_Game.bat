@@ -8,12 +8,11 @@ echo.
 echo  [1] Connect to Full 1:1 PsychonautStation Server (Port 1337)
 echo  [2] Rebuild & Launch Full PsychonautStation Server
 echo  [3] Play OpenDream C# Engine (Port 25566)
-echo  [4] Run DMToCSharp Native Desktop App (60 FPS)
-echo  [5] Run Full Automated Test Suite (18/18 Unit Tests)
-echo  [6] Exit
+echo  [4] Run Full Automated Test Suite (18/18 Unit Tests)
+echo  [5] Exit
 echo.
 echo ======================================================================
-set /p choice="Please select an option (1-6): "
+set /p choice="Please select an option (1-5): "
 
 if "%choice%"=="1" (
     echo.
@@ -38,20 +37,13 @@ if "%choice%"=="3" (
 
 if "%choice%"=="4" (
     echo.
-    echo Launching Native C# Desktop SS13 App...
-    call "%~dp0\Play_SS13.bat"
-    exit /b 0
-)
-
-if "%choice%"=="5" (
-    echo.
     echo Running automated test suite...
     bin\DMToCSharp.exe test
     pause
     exit /b 0
 )
 
-if "%choice%"=="6" (
+if "%choice%"=="5" (
     exit /b 0
 )
 
