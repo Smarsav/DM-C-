@@ -6,10 +6,14 @@ using System.Text;
 using System.Threading;
 using DMToCSharp.Core;
 using DMToCSharp.Runtime.Atmos;
+using DMToCSharp.Runtime.Audio;
 using DMToCSharp.Runtime.Chemistry;
+using DMToCSharp.Runtime.Database;
+using DMToCSharp.Runtime.GameModes;
 using DMToCSharp.Runtime.Graphics;
 using DMToCSharp.Runtime.Health;
 using DMToCSharp.Runtime.Items;
+using DMToCSharp.Runtime.Lighting;
 using DMToCSharp.Runtime.Maps;
 using DMToCSharp.Runtime.MC;
 using DMToCSharp.Runtime.Network;
@@ -66,11 +70,22 @@ namespace DMToCSharp.Runtime.TGUI
             MasterController.Instance.RegisterSubsystem(SSAir.Instance);
             MasterController.Instance.RegisterSubsystem(SSPower.Instance);
             MasterController.Instance.RegisterSubsystem(SSRadio.Instance);
+            MasterController.Instance.RegisterSubsystem(SSLighting.Instance);
+            MasterController.Instance.RegisterSubsystem(SSAudio.Instance);
+            MasterController.Instance.RegisterSubsystem(SSGameMode.Instance);
+            MasterController.Instance.RegisterSubsystem(SSDatabase.Instance);
+
             SSPower.Instance.RegisterAPC(StationAPC);
             SSPower.Instance.RegisterSMES(StationSMES);
 
+            // Register Light Source on Player Mob
+            if (LocalPlayer.Mob != null)
+            {
+                SSLighting.Instance.RegisterLight(new LightSource(LocalPlayer.Mob, 5, 1.0, "#60a5fa"));
+            }
+
             // Broadcast initial station messages
-            SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, "Welcome to Space Station 13 (.NET Runtime). Systems nominal.");
+            SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, "Welcome to Space Station 13 (.NET Runtime). All subsystems online.");
             SSRadio.Instance.Broadcast("Chief Medical Officer", "Medical", SSRadio.FREQ_MEDICAL, "Medbay triage active and stocked.");
             SSRadio.Instance.Broadcast("Head of Security", "Security", SSRadio.FREQ_SECURITY, "Station security level set to Code Green.");
         }
@@ -164,6 +179,14 @@ namespace DMToCSharp.Runtime.TGUI
                 {
                     HandleAiSetPreset(ctx);
                 }
+                else if (url == "/api/gamemode")
+                {
+                    HandleGameMode(ctx);
+                }
+                else if (url == "/api/database/players")
+                {
+                    HandleDatabasePlayers(ctx);
+                }
                 else
                 {
                     HandleIndexHtml(ctx);
@@ -176,6 +199,45 @@ namespace DMToCSharp.Runtime.TGUI
                 ctx.Response.OutputStream.Write(err, 0, err.Length);
                 ctx.Response.Close();
             }
+        }
+
+        private void HandleGameMode(HttpListenerContext ctx)
+        {
+            var mode = SSGameMode.Instance;
+            List<string> antags = new List<string>();
+            foreach (var a in mode.Antagonists)
+            {
+                List<string> objs = new List<string>();
+                foreach (var o in a.Objectives)
+                {
+                    objs.Add(string.Format("{{\"desc\":\"{0}\",\"done\":{1}}}", o.Description.Replace("\"", "\\\""), o.Completed ? "true" : "false"));
+                }
+                antags.Add(string.Format("{{\"name\":\"{0}\",\"role\":\"{1}\",\"tc\":{2},\"objs\":[{3}]}}",
+                    a.CharacterName, a.Role, a.Telecrystals, string.Join(",", objs.ToArray())));
+            }
+
+            string json = string.Format("{{\"mode\":\"{0}\",\"stage\":\"{1}\",\"time\":{2},\"antags\":[{3}]}}",
+                mode.ModeName, mode.Stage, mode.RoundTimeSeconds, string.Join(",", antags.ToArray()));
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.OutputStream.Write(data, 0, data.Length);
+            ctx.Response.Close();
+        }
+
+        private void HandleDatabasePlayers(HttpListenerContext ctx)
+        {
+            var players = SSDatabase.Instance.GetAllPlayers();
+            List<string> list = new List<string>();
+            foreach (var p in players)
+            {
+                list.Add(string.Format("{{\"ckey\":\"{0}\",\"name\":\"{1}\",\"job\":\"{2}\",\"rounds\":{3},\"karma\":{4}}}",
+                    p.CKey, p.CharacterName, p.PreferredJob, p.RoundsPlayed, p.Karma));
+            }
+            string json = string.Format("[{0}]", string.Join(",", list.ToArray()));
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.OutputStream.Write(data, 0, data.Length);
+            ctx.Response.Close();
         }
 
         private void HandleAiLaws(HttpListenerContext ctx)
@@ -198,6 +260,7 @@ namespace DMToCSharp.Runtime.TGUI
             string preset = ctx.Request.QueryString["preset"] ?? "Asimov";
             StationAI.Laws.ApplyPreset(preset);
             SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, string.Format("Silicon law set updated to: {0}", preset));
+            SSAudio.Instance.PlaySound("law_update.ogg", 1, 1, 1);
             HandleAiLaws(ctx);
         }
 
@@ -232,6 +295,7 @@ namespace DMToCSharp.Runtime.TGUI
             if (ctx.Request.QueryString["freq"] != null) double.TryParse(ctx.Request.QueryString["freq"], out freq);
 
             SSRadio.Instance.Broadcast(sender, "Command", freq, text);
+            SSAudio.Instance.PlaySound("radio_beep.ogg", 1, 1, 1);
             HandleRadioMessages(ctx);
         }
 
@@ -239,6 +303,13 @@ namespace DMToCSharp.Runtime.TGUI
         {
             string dir = ctx.Request.QueryString["dir"] ?? "w";
             bool moved = LocalPlayer.HandleMovement(dir);
+
+            if (moved)
+            {
+                SSAudio.Instance.PlaySound("footstep.ogg",
+                    LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1,
+                    LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1, 1, 50.0);
+            }
 
             string json = string.Format("{{\"success\":{0},\"x\":{1},\"y\":{2}}}",
                 moved ? "true" : "false",
@@ -279,7 +350,11 @@ namespace DMToCSharp.Runtime.TGUI
                 "\"health_blood\": {18:F0}," +
                 "\"active_item\": \"{19}\"," +
                 "\"radio_transmissions\": {20}," +
-                "\"ai_law_preset\": \"{21}\"" +
+                "\"ai_law_preset\": \"{21}\"," +
+                "\"active_lights\": {22}," +
+                "\"sounds_played\": {23}," +
+                "\"gamemode\": \"{24}\"," +
+                "\"round_time\": {25}" +
                 "}}",
                 MasterController.Instance.CurrentIteration,
                 MasterController.Instance.AverageTickTimeMs,
@@ -301,7 +376,11 @@ namespace DMToCSharp.Runtime.TGUI
                 PlayerHealth.BloodVolume,
                 PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "Empty Hand",
                 SSRadio.Instance.TotalTransmissions,
-                StationAI.Laws.Name
+                StationAI.Laws.Name,
+                SSLighting.Instance.ActiveLightsCount,
+                SSAudio.Instance.TotalSoundsPlayed,
+                SSGameMode.Instance.ModeName,
+                SSGameMode.Instance.RoundTimeSeconds
             );
 
             byte[] data = Encoding.UTF8.GetBytes(json);
@@ -343,6 +422,9 @@ namespace DMToCSharp.Runtime.TGUI
                     bool wWall = tW != null && (tW.density.ToBool() || tW.name.AsString.Contains("wall"));
                     int autotileMask = DMIParser.CalculateAutotileMask(nWall, sWall, eWall, wWall);
 
+                    // Dynamic Lighting
+                    double lum = SSLighting.Instance.GetTileLuminosity(x, y, z);
+
                     if (t != null)
                     {
                         foreach (DMValue c in t.contents)
@@ -355,8 +437,9 @@ namespace DMToCSharp.Runtime.TGUI
                         }
                     }
 
-                    tileJsonList.Add(string.Format("{{\"x\":{0},\"y\":{1},\"name\":\"{2}\",\"wall\":{3},\"door\":{4},\"player\":{5},\"mask\":{6}}}",
-                        x, y, name, isWall ? "true" : "false", isAirlock ? "true" : "false", isPlayer ? "true" : "false", autotileMask));
+                    tileJsonList.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        "{{\"x\":{0},\"y\":{1},\"name\":\"{2}\",\"wall\":{3},\"door\":{4},\"player\":{5},\"mask\":{6},\"lum\":{7:F2}}}",
+                        x, y, name, isWall ? "true" : "false", isAirlock ? "true" : "false", isPlayer ? "true" : "false", autotileMask, lum));
                 }
             }
 
@@ -374,14 +457,17 @@ namespace DMToCSharp.Runtime.TGUI
             if (action == "toggle_airlock" && !AirlockBolted)
             {
                 AirlockOpen = !AirlockOpen;
+                SSAudio.Instance.PlaySound(AirlockOpen ? "door_open.ogg" : "door_close.ogg", 1, 1, 1);
             }
             else if (action == "toggle_bolt")
             {
                 AirlockBolted = !AirlockBolted;
+                SSAudio.Instance.PlaySound("door_bolt.ogg", 1, 1, 1);
             }
             else if (action == "toggle_breaker")
             {
                 StationAPC.MainBreaker = !StationAPC.MainBreaker;
+                SSAudio.Instance.PlaySound("breaker_click.ogg", 1, 1, 1);
             }
             else if (action == "ai_lockdown")
             {
@@ -389,15 +475,18 @@ namespace DMToCSharp.Runtime.TGUI
                 AirlockBolted = true;
                 AirlockOpen = false;
                 SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMAND, "EMERGENCY: Complete station lockdown protocol initiated.");
+                SSAudio.Instance.PlaySound("alarm_klaxon.ogg", 1, 1, 1, 100.0, 30.0);
             }
             else if (action == "vent_air")
             {
                 StationAir.RemoveRatio(0.15);
+                SSAudio.Instance.PlaySound("air_vent.ogg", 1, 1, 1);
             }
             else if (action == "repressurize")
             {
                 StationAir.AdjustMoles(GasType.Oxygen, 5.0);
                 StationAir.AdjustMoles(GasType.Nitrogen, 18.0);
+                SSAudio.Instance.PlaySound("gas_inject.ogg", 1, 1, 1);
             }
             else if (action == "swap_hands")
             {
@@ -407,11 +496,13 @@ namespace DMToCSharp.Runtime.TGUI
             {
                 PlayerHealth.HealDamage(DamageType.Brute, 15.0);
                 PlayerHealth.HealDamage(DamageType.Burn, 15.0);
+                SSAudio.Instance.PlaySound("medkit_use.ogg", 1, 1, 1);
             }
             else if (action == "mix_chem")
             {
                 ChemStation.AddReagent("oxygen", 10.0);
                 ChemStation.CheckReactions();
+                SSAudio.Instance.PlaySound("chem_sizzle.ogg", 1, 1, 1);
             }
 
             HandleApiStatus(ctx);
@@ -424,7 +515,7 @@ namespace DMToCSharp.Runtime.TGUI
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <title>Space Station 13 - TGUI Live Console, AI Core & WebGL Engine</title>
+    <title>Space Station 13 - Complete .NET Engine Suite</title>
     <link href=""https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap"" rel=""stylesheet"">
     <style>
         :root {
@@ -492,7 +583,7 @@ namespace DMToCSharp.Runtime.TGUI
         @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 18px;
             margin-bottom: 20px;
         }
@@ -680,11 +771,11 @@ namespace DMToCSharp.Runtime.TGUI
 <body>
     <div class=""header"">
         <div class=""logo"">
-            <span>🚀 SPACE STATION 13 // TGUI</span>
+            <span>🚀 SPACE STATION 13 // .NET RUNTIME ENGINE</span>
         </div>
         <div class=""status-badge"">
             <div class=""status-dot""></div>
-            <span>MULTIPLAYER .NET RUNTIME ACTIVE</span>
+            <span>ALL 18 SUBSYSTEMS NOMINAL</span>
         </div>
     </div>
 
@@ -714,11 +805,30 @@ namespace DMToCSharp.Runtime.TGUI
             </div>
         </div>
 
+        <!-- GAME MODE & OBJECTIVES CARD -->
+        <div class=""card"">
+            <div class=""card-title"">
+                <span>ROUND & GAME MODE</span>
+                <span style=""font-size:12px; color:#f59e0b;"" id=""val-gamemode"">TRAITOR</span>
+            </div>
+            <div class=""metric-row"">
+                <span class=""metric-label"">Round Elapsed</span>
+                <span class=""metric-val"" id=""val-round-time"">00:00</span>
+            </div>
+            <div class=""metric-row"">
+                <span class=""metric-label"">Syndicate Uplink</span>
+                <span class=""metric-val"" style=""color:#ef4444; font-size:13px;"">20 TC Available</span>
+            </div>
+            <div class=""laws-box"" id=""objectives-box"" style=""border-color:rgba(245, 158, 11, 0.4); color:#fde68a; max-height:80px;"">
+                - Assassinate Research Director<br>- Steal Antique Laser Gun
+            </div>
+        </div>
+
         <!-- AI CORE & SILICON LAWS CARD -->
         <div class=""card"">
             <div class=""card-title"">
                 <span>STATION MASTER AI</span>
-                <span style=""font-size:12px; color:#ef4444;"" id=""val-ai-preset"">ASIMOV</span>
+                <span style=""font-size:12px; color:#ef4444;"">ASIMOV</span>
             </div>
             <div class=""laws-box"" id=""laws-list"">
                 Law 1: You may not injure a human being.
@@ -726,40 +836,36 @@ namespace DMToCSharp.Runtime.TGUI
             <div class=""btn-group"">
                 <button class=""btn"" onclick=""changeLaws('Corporate')"">Corporate</button>
                 <button class=""btn"" onclick=""changeLaws('Paladin')"">Paladin</button>
-                <button class=""btn btn-danger"" onclick=""sendAct('ai_lockdown')"">AI Lockdown</button>
+                <button class=""btn btn-danger"" onclick=""sendAct('ai_lockdown')"">Lockdown</button>
             </div>
         </div>
 
-        <!-- ATMOSPHERICS CARD -->
+        <!-- ATMOSPHERICS & LIGHTING CARD -->
         <div class=""card"">
             <div class=""card-title"">
-                <span>ATMOSPHERICS (SSair)</span>
+                <span>ATMOS & LIGHTING</span>
                 <span style=""font-size:12px; color:#60a5fa;"">ENV-1</span>
             </div>
             <div class=""metric-row"">
-                <span class=""metric-label"">Station Pressure</span>
-                <span class=""metric-val"" id=""val-pressure"">101.3 kPa</span>
+                <span class=""metric-label"">Pressure / Temp</span>
+                <span class=""metric-val"" id=""val-pressure"" style=""font-size:13px;"">101.3 kPa / 20.0°C</span>
             </div>
             <div class=""metric-row"">
-                <span class=""metric-label"">Temperature</span>
-                <span class=""metric-val"" id=""val-temp"">20.0 °C</span>
-            </div>
-            <div class=""metric-row"">
-                <span class=""metric-label"">O2 / N2 Content</span>
-                <span class=""metric-val"" id=""val-gases"" style=""font-size:13px;"">21.8 / 82.2 mol</span>
+                <span class=""metric-label"">Active Lights / Audio</span>
+                <span class=""metric-val"" id=""val-lights"" style=""font-size:13px; color:#38bdf8;"">1 Lights / 0 Sfx</span>
             </div>
             <div class=""btn-group"">
                 <button class=""btn"" onclick=""sendAct('repressurize')"">Repressurize</button>
-                <button class=""btn btn-danger"" onclick=""sendAct('vent_air')"">Emergency Vent</button>
+                <button class=""btn btn-danger"" onclick=""sendAct('vent_air')"">Vent Air</button>
             </div>
         </div>
     </div>
 
-    <!-- 2D INTERACTIVE RADAR & PLAYER CANVAS WITH AUTOTILING -->
+    <!-- 2D INTERACTIVE RADAR & PLAYER CANVAS WITH DYNAMIC LIGHTING -->
     <div class=""radar-section"">
         <div class=""card-title"">
-            <span>2D STATION RADAR & PIXEL AUTOTILING (LIVE WASD / ARROW CONTROLS)</span>
-            <span style=""font-size:12px; color:#38bdf8;"">AUTOTILE TEXTURE ENGINE ACTIVE</span>
+            <span>2D STATION RADAR & DYNAMIC LIGHTING (LIVE WASD / ARROW CONTROLS)</span>
+            <span style=""font-size:12px; color:#38bdf8;"">DYNAMIC LUMENS & OCCLUSION ACTIVE</span>
         </div>
         <div class=""canvas-wrapper"">
             <div>
@@ -772,12 +878,13 @@ namespace DMToCSharp.Runtime.TGUI
                 <h4 style=""color:#60a5fa; font-family:'Orbitron',sans-serif; margin-bottom:12px;"">Tile & Target Telemetry</h4>
                 <div class=""metric-row""><span class=""metric-label"">Clicked Coordinate</span><span class=""metric-val"" id=""inspect-coord"">(1, 1, 1)</span></div>
                 <div class=""metric-row""><span class=""metric-label"">Turf Name</span><span class=""metric-val"" id=""inspect-turf"">Floor</span></div>
-                <div class=""metric-row""><span class=""metric-label"">Density / Passable</span><span class=""metric-val"" id=""inspect-density"">Passable</span></div>
+                <div class=""metric-row""><span class=""metric-label"">Luminosity</span><span class=""metric-val"" id=""inspect-lum"" style=""font-size:13px; color:#38bdf8;"">1.00 Lumens</span></div>
                 <div class=""metric-row""><span class=""metric-label"">Autotile Mask</span><span class=""metric-val"" id=""inspect-mask"" style=""font-size:13px; color:#f59e0b;"">0</span></div>
                 
-                <h4 style=""color:#93c5fd; font-family:'Orbitron',sans-serif; margin-top:16px; margin-bottom:8px; font-size:13px;"">Chemistry Synthesis</h4>
+                <h4 style=""color:#93c5fd; font-family:'Orbitron',sans-serif; margin-top:16px; margin-bottom:8px; font-size:13px;"">Actions & Interactions</h4>
                 <div class=""btn-group"" style=""margin-top:0;"">
-                    <button class=""btn"" onclick=""sendAct('mix_chem')"">Mix Reagents</button>
+                    <button class=""btn"" onclick=""sendAct('toggle_airlock')"">Toggle Airlock</button>
+                    <button class=""btn"" onclick=""sendAct('mix_chem')"">Mix Chemistry</button>
                 </div>
                 
                 <p style=""margin-top:14px; font-size:11px; color:var(--text-dim);"">Legend: <span style=""color:#475569;"">■ Wall</span> | <span style=""color:#1e3a8a;"">■ Floor</span> | <span style=""color:#f59e0b;"">■ Airlock</span> | <span style=""color:#38bdf8;"">● Player</span></p>
@@ -811,13 +918,29 @@ namespace DMToCSharp.Runtime.TGUI
         const canvas = document.getElementById('stationCanvas');
         const ctx = canvas.getContext('2d');
 
+        // Simple Web Audio Synthesizer for spatial sound effects
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep(freq = 440, type = 'sine', duration = 0.1) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
         async function fetchStatus() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
-                document.getElementById('val-pressure').innerText = data.air_pressure.toFixed(1) + ' kPa';
-                document.getElementById('val-temp').innerText = data.air_temp_c.toFixed(1) + ' °C';
-                document.getElementById('val-gases').innerText = data.air_o2.toFixed(1) + ' / ' + data.air_n2.toFixed(1) + ' mol';
+                document.getElementById('val-pressure').innerText = data.air_pressure.toFixed(1) + ' kPa / ' + data.air_temp_c.toFixed(1) + '°C';
 
                 document.getElementById('val-hp').innerText = data.health_hp + ' / ' + data.health_max;
                 document.getElementById('bar-hp').style.width = ((data.health_hp / data.health_max) * 100) + '%';
@@ -825,7 +948,12 @@ namespace DMToCSharp.Runtime.TGUI
                 document.getElementById('val-blood').innerText = data.health_blood + ' ml';
                 document.getElementById('val-item').innerText = data.active_item;
                 document.getElementById('radio-count').innerText = data.radio_transmissions + ' TRANSMISSIONS';
-                document.getElementById('val-ai-preset').innerText = data.ai_law_preset.toUpperCase();
+                document.getElementById('val-gamemode').innerText = data.gamemode.toUpperCase();
+                document.getElementById('val-lights').innerText = data.active_lights + ' Lights / ' + data.sounds_played + ' Sfx';
+
+                const m = Math.floor(data.round_time / 60);
+                const s = data.round_time % 60;
+                document.getElementById('val-round-time').innerText = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
             } catch(e) { }
         }
 
@@ -842,6 +970,7 @@ namespace DMToCSharp.Runtime.TGUI
 
         async function changeLaws(preset) {
             await fetch('/api/ai/set_preset?preset=' + preset);
+            playBeep(880, 'square', 0.2);
             fetchLaws();
             fetchStatus();
         }
@@ -877,6 +1006,7 @@ namespace DMToCSharp.Runtime.TGUI
             const text = input.value.trim();
             if (!text) return;
             input.value = '';
+            playBeep(600, 'sine', 0.08);
             await fetch('/api/radio/send?freq=' + freq + '&text=' + encodeURIComponent(text));
             fetchRadio();
         }
@@ -893,7 +1023,6 @@ namespace DMToCSharp.Runtime.TGUI
                 if (tile.wall) {
                     ctx.fillStyle = '#334155';
                     ctx.fillRect(px, py, tileSize, tileSize);
-                    // Draw Autotile border accents
                     ctx.strokeStyle = '#475569';
                     ctx.lineWidth = 1.5;
                     ctx.strokeRect(px + 1, py + 1, tileSize - 2, tileSize - 2);
@@ -903,6 +1032,13 @@ namespace DMToCSharp.Runtime.TGUI
                 } else {
                     ctx.fillStyle = '#1e293b';
                     ctx.fillRect(px, py, tileSize - 1, tileSize - 1);
+                }
+
+                // Dynamic light shading overlay
+                const darkness = Math.max(0, 1.0 - (tile.lum || 0.2));
+                if (darkness > 0) {
+                    ctx.fillStyle = 'rgba(2, 6, 23, ' + (darkness * 0.7) + ')';
+                    ctx.fillRect(px, py, tileSize, tileSize);
                 }
 
                 if (tile.player) {
@@ -918,6 +1054,7 @@ namespace DMToCSharp.Runtime.TGUI
         }
 
         async function movePlayer(dir) {
+            playBeep(220, 'triangle', 0.04);
             await fetch('/api/player/move?dir=' + dir);
             await fetchMap();
             fetchStatus();
@@ -946,12 +1083,13 @@ namespace DMToCSharp.Runtime.TGUI
             if (clicked) {
                 document.getElementById('inspect-coord').innerText = '(' + clicked.x + ', ' + clicked.y + ', 1)';
                 document.getElementById('inspect-turf').innerText = clicked.name;
-                document.getElementById('inspect-density').innerText = clicked.wall ? 'Impassable Wall' : 'Passable';
+                document.getElementById('inspect-lum').innerText = (clicked.lum || 0).toFixed(2) + ' Lumens';
                 document.getElementById('inspect-mask').innerText = clicked.mask;
             }
         });
 
         async function sendAct(action) {
+            playBeep(520, 'sine', 0.08);
             await fetch('/api/act?action=' + action);
             fetchStatus();
             fetchMap();

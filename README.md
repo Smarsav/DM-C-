@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20.NET%20Framework-lightgrey.svg)]()
-[![Test Suite](https://img.shields.io/badge/tests-16%2F16%20passing%20(100%25)-success.svg)]()
+[![Test Suite](https://img.shields.io/badge/tests-18%2F18%20passing%20(100%25)-success.svg)]()
 
 ---
 
@@ -116,6 +116,14 @@ To empower complete execution of SS13 game code bases, DMToCSharp embeds native 
     - Complete law set architecture (Asimov, Corporate, Paladin, Antimov), free-roaming camera eye (`AIEye`), cyborg chassis modules, and emergency station-wide lockdowns.
 12. **DMI Metadata & 32x32 Pixel Autotiling Engine (`DMIParser`)**:
     - Parses BYOND `.dmi` sprite sheet definitions and computes 4-bit cardinal autotile bitmasks for seamless wall corner and floor border rendering.
+13. **Dynamic Lighting & Ray Occlusion Engine (`SSLighting`, `LightSource`)**:
+    - Real-time tile luminosity computations, wall opacity ray occlusion (dynamic shadow casting), and falloff curves.
+14. **3D Spatial Audio & Web Synthesizer (`SSAudio`, `SoundEvent`)**:
+    - Positional distance attenuation, stereo panning (-1.0 to +1.0), and Web Audio API synthesized sound cues.
+15. **Game Modes, Antagonists & Objectives (`SSGameMode`, `Antagonist`)**:
+    - Traitor, Nuclear Operatives, and Revolution game modes with Syndicate uplink telecrystals, secret assassination/theft objectives, and round end reports.
+16. **Persistent Database & Player Persistence (`SSDatabase`, `PlayerRecord`)**:
+    - Player profiles, job preferences, karma, round history, and thread-safe persistence.
 
 ---
 
