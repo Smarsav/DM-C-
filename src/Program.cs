@@ -446,7 +446,7 @@ namespace DMToCSharp
         private static int RunMapInspect(string mapPath)
         {
             Console.WriteLine("================================================================================");
-            Console.WriteLine(" Space Station 13 - PsychonautStation DMM Map Inspector");
+            Console.WriteLine(" Space Station 13 - DMM Map Inspector");
             Console.WriteLine("================================================================================");
             Console.WriteLine("Analyzing map: " + mapPath);
             var report = Runtime.Maps.StationMapInspector.InspectMapFile(mapPath);

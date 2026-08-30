@@ -30,7 +30,7 @@
 
 ## Overview
 
-**DMToCSharp** is an end-to-end compiler infrastructure and runtime engine that enables bidirectional source transformation between BYOND DreamMaker (`.dm` / `.dme`) and C# source code (`.cs`), along with native execution capabilities for complex SS13 (Space Station 13) codebases such as PsychonautStation and /tg/station.
+**DMToCSharp** is an end-to-end compiler infrastructure and runtime engine that enables bidirectional source transformation between BYOND DreamMaker (`.dm` / `.dme`) and C# source code (`.cs`), along with native execution capabilities for complex SS13 (Space Station 13) codebases.
 
 ---
 
@@ -82,7 +82,7 @@ graph TD
 
 ## Space Station 13 Runtime Subsystems
 
-To empower complete execution of SS13 game code bases (including **PsychonautStation**), DMToCSharp embeds native engine subsystems:
+To empower complete execution of SS13 game code bases, DMToCSharp embeds native engine subsystems:
 
 1. **DMM Map Parser & 3D Spatial Grid (`DMMParser`, `DMSpatialGrid`)**:
    - Parses BYOND `.dmm` map format tile dictionaries and 3D coordinate matrices.

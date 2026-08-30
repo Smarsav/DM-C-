@@ -23,7 +23,7 @@ namespace DMCompiled
             DMBuiltins.world_output(DMValue.Format("Rust-g SHA256 of 'SpaceStation13': ", hash_res));
             DMValue noise_val = DMBuiltins.call_ext((DMValue)"rust_g.dll", (DMValue)"rustg_noise_2d", (DMValue)"12.5", (DMValue)"45.8");
             DMBuiltins.world_output(DMValue.Format("Rust-g Noise at (12.5, 45.8): ", noise_val));
-            DMValue is_valid = DMBuiltins.call_ext((DMValue)"rust_g.dll", (DMValue)"rustg_json_is_valid", (DMValue)"{\"station\": \"Psychonaut\", \"id\": 13}");
+            DMValue is_valid = DMBuiltins.call_ext((DMValue)"rust_g.dll", (DMValue)"rustg_json_is_valid", (DMValue)"{\"station\": \"SpaceStation13\", \"id\": 13}");
             DMBuiltins.world_output(DMValue.Format("Rust-g JSON is valid: ", is_valid));
             DMValue mob1 = (new DMValue(new DM_mob().InitAndNew()));
             mob1.SetVar("x", (DMValue)10);

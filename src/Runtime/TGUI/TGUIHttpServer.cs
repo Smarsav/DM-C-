@@ -346,7 +346,7 @@ namespace DMToCSharp.Runtime.TGUI
 <body>
     <div class=""header"">
         <div class=""logo"">
-            <span>🚀 PSYCHONAUT STATION // TGUI</span>
+            <span>🚀 SPACE STATION 13 // TGUI</span>
         </div>
         <div class=""status-badge"">
             <div class=""status-dot""></div>

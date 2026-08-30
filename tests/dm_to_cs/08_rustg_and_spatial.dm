@@ -12,7 +12,7 @@
 	world << "Rust-g Noise at (12.5, 45.8): [noise_val]"
 	
 	// 3. Rust-g JSON Validation
-	var/is_valid = call_ext("rust_g.dll", "rustg_json_is_valid", "{\"station\": \"Psychonaut\", \"id\": 13}")
+	var/is_valid = call_ext("rust_g.dll", "rustg_json_is_valid", "{\"station\": \"SpaceStation13\", \"id\": 13}")
 	world << "Rust-g JSON is valid: [is_valid]"
 	
 	// 4. Spatial Geometry & Distance
