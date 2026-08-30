@@ -4,6 +4,7 @@
 *.exe
 *.dll
 *.pdb
+dotnet-install.ps1
 
 # External cloned game repositories
 psychonaut_station/

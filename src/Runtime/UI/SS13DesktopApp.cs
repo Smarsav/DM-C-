@@ -40,7 +40,6 @@ namespace DMToCSharp.Runtime.UI
         private Label _lblGameMode;
         private FacingDir _playerFacing = FacingDir.South;
         private CombatIntent _currentIntent = CombatIntent.Help;
-        private string _targetZone = "Chest";
 
         public GasMixture StationAir { get; private set; }
         public APC StationAPC { get; private set; }
