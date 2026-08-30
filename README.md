@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20.NET%20Framework-lightgrey.svg)]()
-[![Test Suite](https://img.shields.io/badge/tests-13%2F13%20passing%20(100%25)-success.svg)]()
+[![Test Suite](https://img.shields.io/badge/tests-16%2F16%20passing%20(100%25)-success.svg)]()
 
 ---
 
@@ -112,6 +112,10 @@ To empower complete execution of SS13 game code bases, DMToCSharp embeds native 
    - Complete equipment slots (Hands, Belt, Head, Suit, Pockets, ID Card) and realistic tool actions (Crowbar, Welder, Screwdriver, Wrench, Multitool, Wirecutters) for deconstructing/repairing airlocks and structures.
 10. **Multiplayer Client Session & WASD Movement Gateway (`DMClient`, `ClientManager`)**:
     - Real-time player keyboard input routing (`W/A/S/D`, Arrow keys) with collision detection and live viewport synchronization.
+11. **Silicon Laws & Station Master AI Core (`SiliconLaws`, `AICore`, `CyborgMob`)**:
+    - Complete law set architecture (Asimov, Corporate, Paladin, Antimov), free-roaming camera eye (`AIEye`), cyborg chassis modules, and emergency station-wide lockdowns.
+12. **DMI Metadata & 32x32 Pixel Autotiling Engine (`DMIParser`)**:
+    - Parses BYOND `.dmi` sprite sheet definitions and computes 4-bit cardinal autotile bitmasks for seamless wall corner and floor border rendering.
 
 ---
 

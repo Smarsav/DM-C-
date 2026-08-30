@@ -7,6 +7,7 @@ using System.Threading;
 using DMToCSharp.Core;
 using DMToCSharp.Runtime.Atmos;
 using DMToCSharp.Runtime.Chemistry;
+using DMToCSharp.Runtime.Graphics;
 using DMToCSharp.Runtime.Health;
 using DMToCSharp.Runtime.Items;
 using DMToCSharp.Runtime.Maps;
@@ -14,6 +15,7 @@ using DMToCSharp.Runtime.MC;
 using DMToCSharp.Runtime.Network;
 using DMToCSharp.Runtime.Power;
 using DMToCSharp.Runtime.Radio;
+using DMToCSharp.Runtime.Silicon;
 
 namespace DMToCSharp.Runtime.TGUI
 {
@@ -33,6 +35,7 @@ namespace DMToCSharp.Runtime.TGUI
         public InventorySystem PlayerInventory { get; private set; }
         public ReagentContainer ChemStation { get; private set; }
         public DMClient LocalPlayer { get; private set; }
+        public AICore StationAI { get; private set; }
 
         public TGUIHttpServer(int port = 8080)
         {
@@ -46,6 +49,7 @@ namespace DMToCSharp.Runtime.TGUI
             PlayerInventory = new InventorySystem();
             ChemStation = new ReagentContainer(100.0);
             LocalPlayer = ClientManager.DefaultPlayer;
+            StationAI = new AICore("Station Master AI");
 
             // Equip default items
             PlayerInventory.EquipItem(InvSlot.RightHand, new DM_tool(ToolType.Crowbar, "Mechanical Crowbar"));
@@ -152,6 +156,14 @@ namespace DMToCSharp.Runtime.TGUI
                 {
                     HandleRadioSend(ctx);
                 }
+                else if (url == "/api/ai/laws")
+                {
+                    HandleAiLaws(ctx);
+                }
+                else if (url == "/api/ai/set_preset")
+                {
+                    HandleAiSetPreset(ctx);
+                }
                 else
                 {
                     HandleIndexHtml(ctx);
@@ -164,6 +176,29 @@ namespace DMToCSharp.Runtime.TGUI
                 ctx.Response.OutputStream.Write(err, 0, err.Length);
                 ctx.Response.Close();
             }
+        }
+
+        private void HandleAiLaws(HttpListenerContext ctx)
+        {
+            var laws = StationAI.Laws.GetFormattedLaws();
+            List<string> lawJson = new List<string>();
+            foreach (var l in laws)
+            {
+                lawJson.Add(string.Format("\"{0}\"", l.Replace("\"", "\\\"")));
+            }
+            string json = string.Format("{{\"preset\":\"{0}\",\"laws\":[{1}]}}", StationAI.Laws.Name, string.Join(",", lawJson.ToArray()));
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.OutputStream.Write(data, 0, data.Length);
+            ctx.Response.Close();
+        }
+
+        private void HandleAiSetPreset(HttpListenerContext ctx)
+        {
+            string preset = ctx.Request.QueryString["preset"] ?? "Asimov";
+            StationAI.Laws.ApplyPreset(preset);
+            SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, string.Format("Silicon law set updated to: {0}", preset));
+            HandleAiLaws(ctx);
         }
 
         private void HandleRadioMessages(HttpListenerContext ctx)
@@ -243,7 +278,8 @@ namespace DMToCSharp.Runtime.TGUI
                 "\"health_status\": \"{17}\"," +
                 "\"health_blood\": {18:F0}," +
                 "\"active_item\": \"{19}\"," +
-                "\"radio_transmissions\": {20}" +
+                "\"radio_transmissions\": {20}," +
+                "\"ai_law_preset\": \"{21}\"" +
                 "}}",
                 MasterController.Instance.CurrentIteration,
                 MasterController.Instance.AverageTickTimeMs,
@@ -264,7 +300,8 @@ namespace DMToCSharp.Runtime.TGUI
                 PlayerHealth.Status,
                 PlayerHealth.BloodVolume,
                 PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "Empty Hand",
-                SSRadio.Instance.TotalTransmissions
+                SSRadio.Instance.TotalTransmissions,
+                StationAI.Laws.Name
             );
 
             byte[] data = Encoding.UTF8.GetBytes(json);
@@ -294,6 +331,18 @@ namespace DMToCSharp.Runtime.TGUI
                     bool isAirlock = false;
                     bool isPlayer = (x == pX && y == pY);
 
+                    // Autotile neighbor checking
+                    var tN = grid.GetTurf(x, y + 1, z);
+                    var tS = grid.GetTurf(x, y - 1, z);
+                    var tE = grid.GetTurf(x + 1, y, z);
+                    var tW = grid.GetTurf(x - 1, y, z);
+
+                    bool nWall = tN != null && (tN.density.ToBool() || tN.name.AsString.Contains("wall"));
+                    bool sWall = tS != null && (tS.density.ToBool() || tS.name.AsString.Contains("wall"));
+                    bool eWall = tE != null && (tE.density.ToBool() || tE.name.AsString.Contains("wall"));
+                    bool wWall = tW != null && (tW.density.ToBool() || tW.name.AsString.Contains("wall"));
+                    int autotileMask = DMIParser.CalculateAutotileMask(nWall, sWall, eWall, wWall);
+
                     if (t != null)
                     {
                         foreach (DMValue c in t.contents)
@@ -306,8 +355,8 @@ namespace DMToCSharp.Runtime.TGUI
                         }
                     }
 
-                    tileJsonList.Add(string.Format("{{\"x\":{0},\"y\":{1},\"name\":\"{2}\",\"wall\":{3},\"door\":{4},\"player\":{5}}}",
-                        x, y, name, isWall ? "true" : "false", isAirlock ? "true" : "false", isPlayer ? "true" : "false"));
+                    tileJsonList.Add(string.Format("{{\"x\":{0},\"y\":{1},\"name\":\"{2}\",\"wall\":{3},\"door\":{4},\"player\":{5},\"mask\":{6}}}",
+                        x, y, name, isWall ? "true" : "false", isAirlock ? "true" : "false", isPlayer ? "true" : "false", autotileMask));
                 }
             }
 
@@ -333,6 +382,13 @@ namespace DMToCSharp.Runtime.TGUI
             else if (action == "toggle_breaker")
             {
                 StationAPC.MainBreaker = !StationAPC.MainBreaker;
+            }
+            else if (action == "ai_lockdown")
+            {
+                StationAI.EmergencyLockdown();
+                AirlockBolted = true;
+                AirlockOpen = false;
+                SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMAND, "EMERGENCY: Complete station lockdown protocol initiated.");
             }
             else if (action == "vent_air")
             {
@@ -368,7 +424,7 @@ namespace DMToCSharp.Runtime.TGUI
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <title>Space Station 13 - TGUI Live Console & Telecomms</title>
+    <title>Space Station 13 - TGUI Live Console, AI Core & WebGL Engine</title>
     <link href=""https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap"" rel=""stylesheet"">
     <style>
         :root {
@@ -559,7 +615,7 @@ namespace DMToCSharp.Runtime.TGUI
             color: #93c5fd;
         }
 
-        /* TELECOMMS CHAT STYLES */
+        /* SILICON LAWS & TELECOMMS CHAT STYLES */
         .chat-section {
             background: var(--panel);
             border: 1px solid var(--border);
@@ -608,6 +664,17 @@ namespace DMToCSharp.Runtime.TGUI
             font-family: 'Orbitron', sans-serif;
             font-size: 13px;
         }
+        .laws-box {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+            color: #fca5a5;
+            margin-top: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -647,6 +714,22 @@ namespace DMToCSharp.Runtime.TGUI
             </div>
         </div>
 
+        <!-- AI CORE & SILICON LAWS CARD -->
+        <div class=""card"">
+            <div class=""card-title"">
+                <span>STATION MASTER AI</span>
+                <span style=""font-size:12px; color:#ef4444;"" id=""val-ai-preset"">ASIMOV</span>
+            </div>
+            <div class=""laws-box"" id=""laws-list"">
+                Law 1: You may not injure a human being.
+            </div>
+            <div class=""btn-group"">
+                <button class=""btn"" onclick=""changeLaws('Corporate')"">Corporate</button>
+                <button class=""btn"" onclick=""changeLaws('Paladin')"">Paladin</button>
+                <button class=""btn btn-danger"" onclick=""sendAct('ai_lockdown')"">AI Lockdown</button>
+            </div>
+        </div>
+
         <!-- ATMOSPHERICS CARD -->
         <div class=""card"">
             <div class=""card-title"">
@@ -670,34 +753,13 @@ namespace DMToCSharp.Runtime.TGUI
                 <button class=""btn btn-danger"" onclick=""sendAct('vent_air')"">Emergency Vent</button>
             </div>
         </div>
-
-        <!-- POWER & AIRLOCK CARD -->
-        <div class=""card"">
-            <div class=""card-title"">
-                <span>POWER & ACCESS</span>
-                <span style=""font-size:12px; color:#f59e0b;"">APC & AIRLOCK</span>
-            </div>
-            <div class=""metric-row"">
-                <span class=""metric-label"">Bridge APC Battery</span>
-                <span class=""metric-val"" id=""val-apc-pct"">100.0%</span>
-            </div>
-            <div class=""bar-container""><div class=""bar-fill"" id=""bar-apc"" style=""width: 100%;""></div></div>
-            <div class=""metric-row"" style=""margin-top:8px;"">
-                <span class=""metric-label"">Door Status</span>
-                <span class=""metric-val"" id=""val-door"" style=""color:#10b981;"">CLOSED</span>
-            </div>
-            <div class=""btn-group"">
-                <button class=""btn"" onclick=""sendAct('toggle_airlock')"">Toggle Door</button>
-                <button class=""btn btn-danger"" onclick=""sendAct('toggle_bolt')"">Bolts</button>
-            </div>
-        </div>
     </div>
 
-    <!-- 2D INTERACTIVE RADAR & PLAYER CANVAS -->
+    <!-- 2D INTERACTIVE RADAR & PLAYER CANVAS WITH AUTOTILING -->
     <div class=""radar-section"">
         <div class=""card-title"">
-            <span>2D STATION RADAR (LIVE WASD / ARROW CONTROLS)</span>
-            <span style=""font-size:12px; color:#38bdf8;"">LIVE MULTIPLAYER VIEWPORT</span>
+            <span>2D STATION RADAR & PIXEL AUTOTILING (LIVE WASD / ARROW CONTROLS)</span>
+            <span style=""font-size:12px; color:#38bdf8;"">AUTOTILE TEXTURE ENGINE ACTIVE</span>
         </div>
         <div class=""canvas-wrapper"">
             <div>
@@ -711,7 +773,7 @@ namespace DMToCSharp.Runtime.TGUI
                 <div class=""metric-row""><span class=""metric-label"">Clicked Coordinate</span><span class=""metric-val"" id=""inspect-coord"">(1, 1, 1)</span></div>
                 <div class=""metric-row""><span class=""metric-label"">Turf Name</span><span class=""metric-val"" id=""inspect-turf"">Floor</span></div>
                 <div class=""metric-row""><span class=""metric-label"">Density / Passable</span><span class=""metric-val"" id=""inspect-density"">Passable</span></div>
-                <div class=""metric-row""><span class=""metric-label"">Contents</span><span class=""metric-val"" id=""inspect-contents"" style=""font-size:13px; color:#10b981;"">None</span></div>
+                <div class=""metric-row""><span class=""metric-label"">Autotile Mask</span><span class=""metric-val"" id=""inspect-mask"" style=""font-size:13px; color:#f59e0b;"">0</span></div>
                 
                 <h4 style=""color:#93c5fd; font-family:'Orbitron',sans-serif; margin-top:16px; margin-bottom:8px; font-size:13px;"">Chemistry Synthesis</h4>
                 <div class=""btn-group"" style=""margin-top:0;"">
@@ -757,20 +819,31 @@ namespace DMToCSharp.Runtime.TGUI
                 document.getElementById('val-temp').innerText = data.air_temp_c.toFixed(1) + ' °C';
                 document.getElementById('val-gases').innerText = data.air_o2.toFixed(1) + ' / ' + data.air_n2.toFixed(1) + ' mol';
 
-                document.getElementById('val-apc-pct').innerText = data.apc_charge_pct.toFixed(1) + '%';
-                document.getElementById('bar-apc').style.width = data.apc_charge_pct + '%';
-
                 document.getElementById('val-hp').innerText = data.health_hp + ' / ' + data.health_max;
                 document.getElementById('bar-hp').style.width = ((data.health_hp / data.health_max) * 100) + '%';
                 document.getElementById('val-health-status').innerText = data.health_status.toUpperCase();
                 document.getElementById('val-blood').innerText = data.health_blood + ' ml';
                 document.getElementById('val-item').innerText = data.active_item;
                 document.getElementById('radio-count').innerText = data.radio_transmissions + ' TRANSMISSIONS';
-
-                const door = document.getElementById('val-door');
-                door.innerText = data.airlock_open ? 'OPEN' : 'CLOSED';
-                door.style.color = data.airlock_open ? '#f59e0b' : '#10b981';
+                document.getElementById('val-ai-preset').innerText = data.ai_law_preset.toUpperCase();
             } catch(e) { }
+        }
+
+        async function fetchLaws() {
+            try {
+                const res = await fetch('/api/ai/laws');
+                const data = await res.json();
+                const container = document.getElementById('laws-list');
+                container.innerHTML = data.laws.map(function(l) {
+                    return '<div style=""margin-bottom:4px;"">' + l + '</div>';
+                }).join('');
+            } catch(e) { }
+        }
+
+        async function changeLaws(preset) {
+            await fetch('/api/ai/set_preset?preset=' + preset);
+            fetchLaws();
+            fetchStatus();
         }
 
         async function fetchMap() {
@@ -819,12 +892,18 @@ namespace DMToCSharp.Runtime.TGUI
 
                 if (tile.wall) {
                     ctx.fillStyle = '#334155';
+                    ctx.fillRect(px, py, tileSize, tileSize);
+                    // Draw Autotile border accents
+                    ctx.strokeStyle = '#475569';
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(px + 1, py + 1, tileSize - 2, tileSize - 2);
                 } else if (tile.door) {
                     ctx.fillStyle = '#f59e0b';
+                    ctx.fillRect(px, py, tileSize - 1, tileSize - 1);
                 } else {
                     ctx.fillStyle = '#1e293b';
+                    ctx.fillRect(px, py, tileSize - 1, tileSize - 1);
                 }
-                ctx.fillRect(px, py, tileSize - 1, tileSize - 1);
 
                 if (tile.player) {
                     ctx.fillStyle = '#38bdf8';
@@ -868,7 +947,7 @@ namespace DMToCSharp.Runtime.TGUI
                 document.getElementById('inspect-coord').innerText = '(' + clicked.x + ', ' + clicked.y + ', 1)';
                 document.getElementById('inspect-turf').innerText = clicked.name;
                 document.getElementById('inspect-density').innerText = clicked.wall ? 'Impassable Wall' : 'Passable';
-                document.getElementById('inspect-contents').innerText = clicked.door ? 'Airlock Door' : (clicked.player ? 'Player Avatar' : 'None');
+                document.getElementById('inspect-mask').innerText = clicked.mask;
             }
         });
 
@@ -882,6 +961,7 @@ namespace DMToCSharp.Runtime.TGUI
         setInterval(fetchMap, 1000);
         setInterval(fetchRadio, 2000);
         fetchStatus();
+        fetchLaws();
         fetchMap();
         fetchRadio();
     </script>
