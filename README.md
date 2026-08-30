@@ -1,129 +1,138 @@
-# DMToCSharp 
-> **A high-performance, bidirectional compiler and transpiler between BYOND's DreamMaker (`.dm` / `.dme`) and C# (`.cs`), complete with a dedicated runtime execution engine and Space Station 13 compatibility layer.**
->
-> *DreamMaker (DM) ile C# arasında çift yönlü (DM ↔ C#) tam özellikli derleyici, kod dönüştürücü ve çalışma zamanı (Runtime) motoru.*
+# DMToCSharp (DM-C-)
+
+> A high-performance, bidirectional compiler, transpiler, and runtime execution engine bridging BYOND's DreamMaker (DM) language and C# (.NET).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20.NET-lightgrey.svg)]()
-[![Tests](https://img.shields.io/badge/tests-7%2F7%20passing%20(100%25)-success.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20.NET%20Framework-lightgrey.svg)]()
+[![Test Suite](https://img.shields.io/badge/tests-7%2F7%20passing%20(100%25)-success.svg)]()
 
 ---
 
-## 📑 İçindekiler / Table of Contents
-- [Öne Çıkan Özellikler / Features](#-öne-çıkan-özellikler--key-features)
-- [Mimari & Tasarım / Architecture](#-mimari--tasarım--architecture)
-- [Kurulum & Derleme / Installation & Build](#-kurulum--derleme--installation--build)
-- [Kullanım Kılavuzu / Usage Guide](#-kullanım-kılavuzu--usage-guide)
-  - [1. DM'den C#'a Derleme (DM -> C#)](#1-dmden-ca-derleme-dm---c)
-  - [2. C#'tan DM'e Dönüştürme (C# -> DM)](#2-ctan-dme-dönüştürme-c---dm)
-  - [3. Test Paketini Çalıştırma (Test Suite)](#3-test-paketini-çalıştırma-test-suite)
-- [Desteklenen DreamMaker Özellikleri / Supported DM Features](#-desteklenen-dreammaker-özellikleri)
-- [Örnekler / Examples](#-örnekler--examples)
-  - [Örnek 1: DM Kodunun C#'a Dönüşümü](#örnek-1-dm-kodunun-ca-dönüşümü)
-  - [Örnek 2: C# Kodunun DM'e Dönüşümü](#örnek-2-c-kodunun-dme-dönüşümü)
-- [Proje Yapısı / Project Structure](#-proje-yapısı--project-structure)
-- [Lisans / License](#-lisans--license)
+## Table of Contents / İçindekiler
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Key Features](#key-features)
+- [Installation & Build](#installation--build)
+- [CLI Reference & Usage](#cli-reference--usage)
+  - [Compiling DreamMaker to C# (DM -> C#)](#compiling-dreammaker-to-c-dm---c)
+  - [Transpiling C# to DreamMaker (C# -> DM)](#transpiling-c-to-dreammaker-c---dm)
+  - [Running the Test Suite](#running-the-test-suite)
+- [Supported Language Features](#supported-language-features)
+- [Code Examples](#code-examples)
+  - [Example 1: DreamMaker to C# Compilation](#example-1-dreammaker-to-c-compilation)
+  - [Example 2: C# to DreamMaker Transpilation](#example-2-c-to-dreammaker-transpilation)
+- [Project Directory Structure](#project-directory-structure)
+- [License](#license)
 
 ---
 
-##  Öne Çıkan Özellikler / Key Features
+## Overview
 
--  **Çift Yönlü Dönüşüm (Bidirectional Pipeline)**:
-  - **DM ➔ C#**: DM AST analizi, OOP sınıf hiyerarşisi, dinamik var çözümleme ve native C# kaynak kod üretimi + `.exe` derlemesi.
-  - **C# ➔ DM**: C# Lexer & Parser, sınıf/metot çözümleme ve BYOND `.dm` formatında temiz kod üretimi.
--  **Tam Özellikli Ön İşlemci (DM Preprocessor)**:
-  - `#include`, `#define`, `#undef`, `#ifdef`, `#ifndef`, `#if`, `#elif`, `#else`, `#endif`.
-  - BYOND `.dme` ortam dosyalarını okuma ve proje ağacını otomatik çözümleme.
-  - Makro genişletme, `#` stringification ve `##` token pasting desteği.
--  **DreamMaker Tip Sistemi ve Nesne Hiyerarşisi (DMObjectTree)**:
-  - Standart BYOND tipleri (`/datum`, `/atom`, `/atom/movable`, `/obj`, `/mob`, `/turf`, `/area`, `/client`, `/world`, `/list`).
-  - Çok seviyeli kalıtım (Multilevel inheritance) ve geçersiz kılma (`proc` / `var` overrides).
-  - Üst metot çağrısı (`..()`) ve dinamik tip doğrulama (`istype()`).
--  **Zengin Çalışma Zamanı Kütüphanesi (DM Runtime Engine)**:
-  - `DMValue`: Null, Number, String, List, Object, Path ve Resource türlerini destekleyen dynamic struct.
-  - `DMList`: 1-indeksli liste, assosiyatif anahtar-değer eşlemeleri ve liste fonksiyonları (`len`, `Copy`, `Find`, `Cut`, `Join`).
-  - `DMWorld`: Global oyun dünyası, çıktı yönetimi (`world << ...`) ve zamanlayıcı.
-  - `DMBuiltins`: `round`, `abs`, `sqrt`, `sin`, `cos`, `min`, `max`, `rand`, `roll`, `prob`, `pick`, `locate`, `spawn`, `sleep`, `uppertext`, `lowertext`, `copytext`, `findtext`, `splittext`, `jointext`, `replacetext`, `alert`.
+**DMToCSharp** is an end-to-end compiler infrastructure that enables bidirectional source transformation between BYOND DreamMaker (`.dm` / `.dme`) and C# source code (`.cs`). In addition to generating human-readable and idiomatic C# code, the project embeds a fully functional runtime library (`DMRuntime`) that implements DreamMaker's dynamic typing system, prototype-based object hierarchy, memory lifecycle, list operations, built-in procedures, and world simulation loop.
 
 ---
 
-##  Mimari & Tasarım / Architecture
+## Architecture
+
+The compiler is organized into independent, decoupled phases adhering to standard compiler construction principles:
 
 ```mermaid
 graph TD
-    subgraph DM to CSharp [DM -> C# Pipeline]
-        DMFile[DreamMaker File .dm / .dme] --> Preproc[DM Preprocessor]
-        Preproc --> DMLex[DM Lexer / Indent Tracking]
-        DMLex --> DMParse[DM Pratt & Recursive Descent Parser]
-        DMParse --> DMAST[DM AST File]
-        DMAST --> DMTree[Semantic DMObjectTree & Scoping]
-        DMTree --> CSEmit[CSharp Emitter]
-        CSEmit --> CSFile[Generated C# Code .cs]
-        CSFile --> CSC[C# Compiler csc.exe]
-        CSC --> EXE[Native Executable .exe]
+    subgraph DM to CSharp Pipeline
+        A[DreamMaker Source .dm / .dme] --> B[DM Preprocessor]
+        B --> C[DM Lexer / Indentation Engine]
+        C --> D[DM Pratt & Recursive Descent Parser]
+        D --> E[DM Abstract Syntax Tree - AST]
+        E --> F[Semantic Object Tree Analysis]
+        F --> G[C# Source Code Emitter]
+        G --> H[Generated C# Source Code .cs]
+        H --> I[C# Roslyn / csc.exe Compiler]
+        I --> J[Standalone Native Binary .exe]
     end
 
-    subgraph CSharp to DM [C# -> DM Pipeline]
-        CSInput[C# Source Code .cs] --> CSLex[C# Lexer]
-        CSLex --> CSParse[C# Parser]
-        CSParse --> CSAST[C# AST Unit]
-        CSAST --> DMEmit[DreamMaker DMEmitter]
-        DMEmit --> DMOutput[Generated DreamMaker .dm]
+    subgraph CSharp to DM Pipeline
+        K[C# Source File .cs] --> L[C# Lexical Analyzer]
+        L --> M[C# Parser]
+        M --> N[C# AST Model]
+        N --> O[DreamMaker Code Emitter]
+        O --> P[Generated DreamMaker Source .dm]
     end
 ```
 
 ---
 
-##  Kurulum & Derleme / Installation & Build
+## Key Features
 
-Proje Windows ortamında .NET Framework 4.0/4.8 veya .NET SDK ile doğrudan derlenebilir.
+- **Bidirectional Pipeline**:
+  - **DM -> C#**: Parses DreamMaker code, analyzes the object tree, resolves prototype inheritance, and emits optimized C# source code ready for compilation with `csc.exe`.
+  - **C# -> DM**: Parses C# class and method declarations, variable bindings, and control structures, translating them back to clean BYOND DreamMaker syntax.
+- **Complete DM Preprocessor**:
+  - Full support for directives: `#include`, `#define`, `#undef`, `#ifdef`, `#ifndef`, `#if`, `#elif`, `#else`, `#endif`.
+  - Recursive resolution of BYOND Environment (`.dme`) project trees.
+  - Macro parameter evaluation, stringification (`#`), and token pasting (`##`).
+- **Semantic Type Hierarchy (`DMObjectTree`)**:
+  - Full support for standard BYOND root types: `/datum`, `/atom`, `/atom/movable`, `/obj`, `/mob`, `/turf`, `/area`, `/client`, `/world`, `/list`.
+  - Deep prototype inheritance, variable defaults propagation, procedure overloading, and super calls (`..()`).
+- **High-Performance Runtime Engine**:
+  - `DMValue`: Dynamic variant struct supporting `Null`, `Number`, `String`, `List`, `Object`, `Path`, and `Resource` with implicit conversions and truthy/falsy evaluation semantics.
+  - `DMList`: 1-based indexing, associative key-value mappings, and standard built-in list methods (`len`, `Add`, `Find`, `Cut`, `Copy`).
+  - `DMWorld`: Global world state, dynamic logging, tick lag handling, and stream output redirection (`world << ...`).
+  - `DMBuiltins`: Standard math library (`round`, `abs`, `sqrt`, `min`, `max`, `rand`, `roll`, `prob`), string manipulation (`copytext`, `findtext`, `splittext`, `jointext`, `replacetext`), type reflection (`istype`), and spatial queries (`locate`).
 
-### Hızlı Derleme (Windows Batch / PowerShell)
+---
+
+## Installation & Build
+
+The codebase is engineered for maximum portability on Windows systems and compiles with .NET Framework 4.0/4.8 or the modern .NET SDK.
+
+### Compiling from Source
+
+Run the automated build script:
 
 ```cmd
-# Batch script ile derleme:
+:: Using the Windows Batch script:
 build.bat
 
-# veya PowerShell ile derleme:
+:: Or using PowerShell:
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-Derleme sonucunda `bin\DMToCSharp.exe` çalıştırılabilir dosyası üretilir.
+The compiled binary will be placed at `bin\DMToCSharp.exe`.
 
 ---
 
-##  Kullanım Kılavuzu / Usage Guide
+## CLI Reference & Usage
 
-### 1. DM'den C#'a Derleme (DM -> C#)
+### Compiling DreamMaker to C# (DM -> C#)
 
-Bir `.dm` veya `.dme` dosyasını C# koduna dönüştürmek ve isteğe bağlı olarak doğrudan `.exe` yapıp çalıştırmak:
-
-```bash
-# DM kodunu C# dosyasına dönüştür:
-bin\DMToCSharp.exe compile game.dm -o game.cs
-
-# DM kodunu C#'a dönüştür ve doğrudan .exe olarak derle:
-bin\DMToCSharp.exe compile game.dm --exe game.exe
-
-# DM kodunu derle ve hemen çalıştır:
-bin\DMToCSharp.exe compile game.dm --run
-
-# Ön işlemci makrosu tanımlayarak derle:
-bin\DMToCSharp.exe compile game.dm -DDEBUG -DMAX_PLAYERS=50 --run
-```
-
-### 2. C#'tan DM'e Dönüştürme (C# -> DM)
-
-Bir C# dosyasını DreamMaker (`.dm`) koduna dönüştürmek:
+Translate a `.dm` or `.dme` source file to C# code:
 
 ```bash
-bin\DMToCSharp.exe cs2dm MyClass.cs -o MyClass.dm
+# Generate C# source file:
+bin\DMToCSharp.exe compile source.dm -o output.cs
+
+# Compile directly to executable binary:
+bin\DMToCSharp.exe compile source.dm --exe game.exe
+
+# Compile and immediately execute:
+bin\DMToCSharp.exe compile source.dm --run
+
+# Pass preprocessor definitions:
+bin\DMToCSharp.exe compile source.dm -DDEBUG -DMAX_PLAYERS=50 --run
 ```
 
-### 3. Test Paketini Çalıştırma (Test Suite)
+### Transpiling C# to DreamMaker (C# -> DM)
 
-Dahili test paketini ve çift yönlü doğrulama senaryolarını çalıştırmak için:
+Translate a C# source file back into DreamMaker syntax:
+
+```bash
+bin\DMToCSharp.exe cs2dm InputClass.cs -o OutputFile.dm
+```
+
+### Running the Test Suite
+
+Execute the internal verification test suite covering syntax constructs, type inheritance, associative lists, control flows, and complex game loops:
 
 ```bash
 bin\DMToCSharp.exe test
@@ -131,27 +140,27 @@ bin\DMToCSharp.exe test
 
 ---
 
-## 📋 Desteklenen DreamMaker Özellikleri
+## Supported Language Features
 
-| Özellik | DMToCSharp Desteği | Açıklama |
+| Feature Area | Support Status | Description |
 |---|:---:|---|
-| **Nesne Hiyerarşisi (Object Tree)** | ✅ Tam Destek | `/datum`, `/atom`, `/obj`, `/mob`, `/turf`, `/area` vb. |
-| **Dinamik Değişkenler & Scope** | ✅ Tam Destek | `var/x`, `/var/global/y`, `this.GetVar()`, `this.SetVar()` |
-| **Metotlar & Kalıtım** | ✅ Tam Destek | `proc/my_proc()`, override, `..()` super call |
-| **String Interpolation** | ✅ Tam Destek | `"Hello [name], your score is [score + 10]"` |
-| **Çoklu Liste Tipleri** | ✅ Tam Destek | Standart liste ve assosiyatif `list("key" = "val")` |
-| **Kontrol Akışı** | ✅ Tam Destek | `if/else`, `while`, `do-while`, `for`, `for-in`, `for-range`, `switch`, `try/catch` |
-| **Dünya & Çıktı Operatörü** | ✅ Tam Destek | `world << "text"`, `DMWorld.Instance.Output` |
-| **Standart Kütüphane Fonksiyonları** | ✅ Tam Destek | `istype`, `length`, `round`, `rand`, `roll`, `prob`, `locate` vb. |
-| **C# ➔ DM Transpiler** | ✅ Tam Destek | C# sınıfları, propertyler, metotlar, döngüler ➔ `.dm` |
+| **Object Hierarchy** | Supported | `/datum`, `/atom`, `/obj`, `/mob`, `/turf`, `/area`, nested paths |
+| **Dynamic Scoping** | Supported | `var/x`, `/var/global/y`, `this.GetVar()`, `this.SetVar()` |
+| **Procedures & Overrides** | Supported | `proc/name()`, override declarations, `..()` super calls |
+| **String Interpolation** | Supported | Full evaluation of embedded expressions: `"Score: [score + 10]"` |
+| **List Data Structures** | Supported | 1-indexed collections and associative key-value dictionaries |
+| **Control Flow** | Supported | `if/else`, `while`, `do-while`, `for`, `for-in`, `for-range`, `switch`, `try/catch` |
+| **Stream Output Operators** | Supported | `world << expression` and standard console redirection |
+| **Standard Library Builtins** | Supported | `istype`, `length`, `round`, `rand`, `roll`, `prob`, `locate`, `spawn` |
+| **C# -> DM Transpiler** | Supported | Classes, fields, properties, procedures, control statements |
 
 ---
 
-##  Örnekler / Examples
+## Code Examples
 
-### Örnek 1: DM Kodunun C#'a Dönüşümü
+### Example 1: DreamMaker to C# Compilation
 
-**DreamMaker Girdisi (`tests/dm_to_cs/01_basics.dm`):**
+**Input: DreamMaker (`tests/dm_to_cs/01_basics.dm`)**
 ```dm
 /var/global/server_name = "DreamMaker Station"
 /var/global/round_id = 42
@@ -169,7 +178,7 @@ bin\DMToCSharp.exe test
 	world << "10 + 25 = [sum]"
 ```
 
-**Oluşturulan C# Kodu:**
+**Output: Generated C# Code**
 ```csharp
 namespace DMCompiled
 {
@@ -202,9 +211,9 @@ namespace DMCompiled
 
 ---
 
-### Örnek 2: C# Kodunun DM'e Dönüşümü
+### Example 2: C# to DreamMaker Transpilation
 
-**C# Girdisi (`tests/cs_to_dm/01_classes_and_methods.cs`):**
+**Input: C# (`tests/cs_to_dm/01_classes_and_methods.cs`)**
 ```csharp
 public class DM_mob_station_ai : DM_mob
 {
@@ -226,7 +235,7 @@ public class DM_mob_station_ai : DM_mob
 }
 ```
 
-**Oluşturulan DreamMaker Kodu:**
+**Output: Generated DreamMaker Code**
 ```dm
 /mob/station/ai
 	var/power_level = 100
@@ -243,12 +252,12 @@ public class DM_mob_station_ai : DM_mob
 
 ---
 
-##  Proje Yapısı / Project Structure
+## Project Directory Structure
 
 ```
 opendreampiskonut/
 ├── src/
-│   ├── Core/                  # AST, DreamPath, Konum ve Tanılayıcılar
+│   ├── Core/                  # AST nodes, DreamPath representation, diagnostics, and source locations
 │   │   ├── Location.cs
 │   │   ├── CompilerDiagnostic.cs
 │   │   ├── DreamPath.cs
@@ -257,51 +266,51 @@ opendreampiskonut/
 │   │       ├── DMASTExpressions.cs
 │   │       ├── DMASTStatements.cs
 │   │       └── DMASTDefinitions.cs
-│   ├── Preprocessor/          # DM Makro ve Ortam (#include / #define) Motoru
+│   ├── Preprocessor/          # Macro engine, environment file parser, directive evaluator
 │   │   ├── DMMacro.cs
 │   │   └── DMPreprocessor.cs
-│   ├── Lexer/                 # DM Tokenizer & Girinti (Indent/Dedent) İzleyici
+│   ├── Lexer/                 # Lexical scanner, token model, indentation tracker
 │   │   ├── TokenType.cs
 │   │   ├── Token.cs
 │   │   └── DMLexer.cs
-│   ├── Parser/                # DM Recursive Descent & Pratt Parser
+│   ├── Parser/                # Recursive descent and Pratt expression parser
 │   │   └── DMParser.cs
-│   ├── Semantics/             # Tip Ağacı, Hiyerarşi & Kapsam Analizi
+│   ├── Semantics/             # Type tree construction, prototype inheritance resolution
 │   │   ├── DMTypeDefinition.cs
 │   │   └── DMObjectTree.cs
-│   ├── Emitter/               # DM AST ➔ C# Kod Üreteci
+│   ├── Emitter/               # C# code emitter and code generator
 │   │   └── CSharpEmitter.cs
-│   ├── CSharpToDM/            # C# ➔ DM Transpiler Pipeline
+│   ├── CSharpToDM/            # C# to DM transpiler subsystem (lexer, parser, emitter)
 │   │   ├── CSharpAST.cs
 │   │   ├── CSharpLexer.cs
 │   │   ├── CSharpParser.cs
 │   │   └── DMEmitter.cs
-│   ├── Runtime/               # DM Çalışma Zamanı & Standart Tipler
+│   ├── Runtime/               # DreamMaker runtime library and standard types
 │   │   ├── DMValue.cs
 │   │   ├── DMList.cs
 │   │   ├── DMObject.cs
 │   │   ├── DMWorld.cs
 │   │   ├── DMBuiltins.cs
 │   │   └── DMStandardTypes.cs
-│   └── Program.cs             # CLI Driver
+│   └── Program.cs             # Command-line driver and test orchestration
 ├── tests/
-│   ├── dm_to_cs/              # DM ➔ C# ve Native Çalıştırma Testleri
+│   ├── dm_to_cs/              # DM -> C# compilation and execution integration tests
 │   │   ├── 01_basics.dm
 │   │   ├── 02_inheritance.dm
 │   │   ├── 03_lists.dm
 │   │   ├── 04_control_flow.dm
 │   │   └── 05_ss13_mini_game.dm
-│   └── cs_to_dm/              # C# ➔ DM Transpiler Testleri
+│   └── cs_to_dm/              # C# -> DM reverse transpilation tests
 │       ├── 01_classes_and_methods.cs
 │       └── 02_math_and_logic.cs
-├── build.bat                  # Hızlı Derleme Scripti (Windows Batch)
-├── build.ps1                  # Hızlı Derleme Scripti (PowerShell)
-├── LICENSE                    # MIT Lisansı
-└── README.md                  # Dokümantasyon
+├── build.bat                  # Automated build script (Windows CMD)
+├── build.ps1                  # Automated build script (PowerShell)
+├── LICENSE                    # MIT License
+└── README.md                  # Project Documentation
 ```
 
 ---
 
-## 📜 Lisans / License
+## License
 
-Bu proje [MIT Lisansı](LICENSE) altında lisanslanmıştır. Açık kaynaklıdır ve özgürce kullanılabilir, geliştirilebilir.
+This project is licensed under the [MIT License](LICENSE).
