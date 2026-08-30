@@ -45,6 +45,14 @@ namespace DMToCSharp
                 return RunMapInspect(mapPath);
             }
 
+            if (command == "project" || command == "batch")
+            {
+                string projectPath = args.Length > 1 ? args[1] : Directory.GetCurrentDirectory();
+                string outDir = args.Length > 2 ? args[2] : null;
+                var res = Compiler.ProjectCompiler.CompileProject(projectPath, outDir);
+                return res.SuccessfulFiles > 0 ? 0 : 1;
+            }
+
             if (command == "cs2dm")
             {
                 return RunCSharpToDM(args);

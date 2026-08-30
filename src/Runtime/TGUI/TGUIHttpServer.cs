@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
 using DMToCSharp.Runtime.Atmos;
+using DMToCSharp.Runtime.Maps;
 using DMToCSharp.Runtime.MC;
 using DMToCSharp.Runtime.Power;
 
@@ -103,6 +105,10 @@ namespace DMToCSharp.Runtime.TGUI
                 {
                     HandleApiAct(ctx);
                 }
+                else if (url == "/api/map/tiles")
+                {
+                    HandleApiMapTiles(ctx);
+                }
                 else
                 {
                     HandleIndexHtml(ctx);
@@ -156,6 +162,49 @@ namespace DMToCSharp.Runtime.TGUI
             ctx.Response.Close();
         }
 
+        private void HandleApiMapTiles(HttpListenerContext ctx)
+        {
+            var grid = DMSpatialGrid.Instance;
+            int maxX = Math.Min(grid.MaxX > 0 ? grid.MaxX : 16, 20);
+            int maxY = Math.Min(grid.MaxY > 0 ? grid.MaxY : 16, 20);
+            int z = 1;
+
+            List<string> tileJsonList = new List<string>();
+            for (int y = maxY; y >= 1; y--)
+            {
+                for (int x = 1; x <= maxX; x++)
+                {
+                    var t = grid.GetTurf(x, y, z);
+                    string name = t != null ? t.name.AsString : "space";
+                    bool isWall = t != null && (t.density.ToBool() || name.Contains("wall"));
+                    bool isAirlock = false;
+                    bool isMob = false;
+
+                    if (t != null)
+                    {
+                        foreach (DMValue c in t.contents)
+                        {
+                            if (c.IsObject)
+                            {
+                                string cName = c.AsObject.name.AsString.ToLowerInvariant();
+                                if (cName.Contains("airlock") || cName.Contains("door")) isAirlock = true;
+                                if (c.AsObject is DM_mob || cName.Contains("mob") || cName.Contains("human")) isMob = true;
+                            }
+                        }
+                    }
+
+                    tileJsonList.Add(string.Format("{{\"x\":{0},\"y\":{1},\"name\":\"{2}\",\"wall\":{3},\"door\":{4},\"mob\":{5}}}",
+                        x, y, name, isWall ? "true" : "false", isAirlock ? "true" : "false", isMob ? "true" : "false"));
+                }
+            }
+
+            string json = string.Format("{{\"width\":{0},\"height\":{1},\"tiles\":[{2}]}}", maxX, maxY, string.Join(",", tileJsonList.ToArray()));
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.OutputStream.Write(data, 0, data.Length);
+            ctx.Response.Close();
+        }
+
         private void HandleApiAct(HttpListenerContext ctx)
         {
             string action = ctx.Request.QueryString["action"];
@@ -196,7 +245,7 @@ namespace DMToCSharp.Runtime.TGUI
     <style>
         :root {
             --bg: #090d16;
-            --panel: rgba(18, 25, 41, 0.85);
+            --panel: rgba(18, 25, 41, 0.9);
             --border: rgba(64, 120, 220, 0.25);
             --accent: #2e75d3;
             --accent-glow: rgba(46, 117, 211, 0.4);
@@ -223,7 +272,7 @@ namespace DMToCSharp.Runtime.TGUI
             padding: 16px 28px;
             border-radius: 12px;
             border: 1px solid var(--border);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         }
         .logo {
@@ -261,6 +310,7 @@ namespace DMToCSharp.Runtime.TGUI
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
             gap: 20px;
+            margin-bottom: 20px;
         }
         .card {
             background: var(--panel);
@@ -340,6 +390,35 @@ namespace DMToCSharp.Runtime.TGUI
             background: rgba(220, 38, 38, 0.5);
             border-color: #ef4444;
             color: #fff;
+        }
+
+        /* 2D CANVAS RADAR STYLES */
+        .radar-section {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .canvas-wrapper {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            margin-top: 16px;
+        }
+        #stationCanvas {
+            background: #020617;
+            border: 2px solid rgba(59, 130, 246, 0.4);
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.2);
+            cursor: crosshair;
+        }
+        .tile-inspector {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            padding: 16px;
         }
     </style>
 </head>
@@ -433,7 +512,30 @@ namespace DMToCSharp.Runtime.TGUI
         </div>
     </div>
 
+    <!-- 2D INTERACTIVE RADAR SECTION -->
+    <div class=""radar-section"">
+        <div class=""card-title"">
+            <span>2D STATION RADAR & MAP GRID (Live Engine Canvas)</span>
+            <span style=""font-size:12px; color:#10b981;"">CLICK TILE TO INSPECT</span>
+        </div>
+        <div class=""canvas-wrapper"">
+            <canvas id=""stationCanvas"" width=""480"" height=""480""></canvas>
+            <div class=""tile-inspector"">
+                <h4 style=""color:#60a5fa; font-family:'Orbitron',sans-serif; margin-bottom:12px;"">Tile Telemetry</h4>
+                <div class=""metric-row""><span class=""metric-label"">Coordinate</span><span class=""metric-val"" id=""inspect-coord"">(1, 1, 1)</span></div>
+                <div class=""metric-row""><span class=""metric-label"">Turf Name</span><span class=""metric-val"" id=""inspect-turf"">Floor</span></div>
+                <div class=""metric-row""><span class=""metric-label"">Density / Passable</span><span class=""metric-val"" id=""inspect-density"">Passable</span></div>
+                <div class=""metric-row""><span class=""metric-label"">Contents</span><span class=""metric-val"" id=""inspect-contents"" style=""font-size:14px; color:#10b981;"">None</span></div>
+                <p style=""margin-top:14px; font-size:12px; color:var(--text-dim);"">Legend: <span style=""color:#475569;"">■ Wall</span> | <span style=""color:#1e3a8a;"">■ Floor</span> | <span style=""color:#f59e0b;"">■ Airlock</span> | <span style=""color:#10b981;"">● Mob</span></p>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let mapData = null;
+        const canvas = document.getElementById('stationCanvas');
+        const ctx = canvas.getContext('2d');
+
         async function fetchStatus() {
             try {
                 const res = await fetch('/api/status');
@@ -461,6 +563,60 @@ namespace DMToCSharp.Runtime.TGUI
             } catch(e) { }
         }
 
+        async function fetchMap() {
+            try {
+                const res = await fetch('/api/map/tiles');
+                mapData = await res.json();
+                renderMap();
+            } catch(e) { }
+        }
+
+        function renderMap() {
+            if (!mapData) return;
+            const tileSize = canvas.width / mapData.width;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            mapData.tiles.forEach(tile => {
+                const px = (tile.x - 1) * tileSize;
+                const py = (mapData.height - tile.y) * tileSize;
+
+                if (tile.wall) {
+                    ctx.fillStyle = '#334155';
+                } else if (tile.door) {
+                    ctx.fillStyle = '#f59e0b';
+                } else {
+                    ctx.fillStyle = '#1e293b';
+                }
+                ctx.fillRect(px, py, tileSize - 1, tileSize - 1);
+
+                if (tile.mob) {
+                    ctx.fillStyle = '#10b981';
+                    ctx.beginPath();
+                    ctx.arc(px + tileSize/2, py + tileSize/2, tileSize/3, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            });
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!mapData) return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const tileSize = canvas.width / mapData.width;
+
+            const gridX = Math.floor(mouseX / tileSize) + 1;
+            const gridY = mapData.height - Math.floor(mouseY / tileSize);
+
+            const clicked = mapData.tiles.find(t => t.x === gridX && t.y === gridY);
+            if (clicked) {
+                document.getElementById('inspect-coord').innerText = '(' + clicked.x + ', ' + clicked.y + ', 1)';
+                document.getElementById('inspect-turf').innerText = clicked.name;
+                document.getElementById('inspect-density').innerText = clicked.wall ? 'Impassable Wall' : 'Passable';
+                document.getElementById('inspect-contents').innerText = clicked.door ? 'Airlock Door' : (clicked.mob ? 'Living Crew/Mob' : 'None');
+            }
+        });
+
         async function sendAct(action) {
             await fetch('/api/act?action=' + action);
             fetchStatus();
@@ -468,6 +624,7 @@ namespace DMToCSharp.Runtime.TGUI
 
         setInterval(fetchStatus, 500);
         fetchStatus();
+        fetchMap();
     </script>
 </body>
 </html>";

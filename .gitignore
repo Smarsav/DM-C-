@@ -8,6 +8,8 @@
 # External cloned game repositories
 psychonaut_station/
 external/
+compiled_*/
+compiled_csharp/
 
 # Generated test binaries
 tests/**/*.exe

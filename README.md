@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20.NET%20Framework-lightgrey.svg)]()
-[![Test Suite](https://img.shields.io/badge/tests-10%2F10%20passing%20(100%25)-success.svg)]()
+[![Test Suite](https://img.shields.io/badge/tests-11%2F11%20passing%20(100%25)-success.svg)]()
 
 ---
 
@@ -17,6 +17,8 @@
 - [Installation & Build](#installation--build)
 - [CLI Reference & Usage](#cli-reference--usage)
   - [Compiling DreamMaker to C# (DM -> C#)](#compiling-dreammaker-to-c-dm---c)
+  - [Batch Project Compilation](#batch-project-compilation)
+  - [Live TGUI Web Server & 2D Radar](#live-tgui-web-server--2d-radar)
   - [Transpiling C# to DreamMaker (C# -> DM)](#transpiling-c-to-dreammaker-c---dm)
   - [Running the Test Suite](#running-the-test-suite)
 - [Supported Language Features](#supported-language-features)
@@ -91,13 +93,17 @@ To empower complete execution of SS13 game code bases, DMToCSharp embeds native 
 2. **Master Controller (MC) & Subsystem Engine (`MasterController`, `DMSubsystem`)**:
    - Manages asynchronous, priority-queued ticking for SS13 subsystems (`SSair`, `SSmachines`, `SSlighting`, `SSmobs`).
    - Dynamic tick budgeting (`world.fps`, `world.tick_lag`), crash recovery, and runtime diagnostics.
-3. **Rust-g Native & Managed FFI Bridge (`RustGBridge`)**:
+3. **Atmospherics & Gas Physics Engine (`GasMixture`, `SSAir`)**:
+   - Ideal gas dynamics ($PV=nRT$), specific heat capacities for $O_2, N_2, CO_2, \text{Plasma}, \text{Tritium}$, thermal equilibrium, and room-to-room diffusion.
+4. **Powernet & Electrical Grid (`Powernet`, `APC`, `SMES`, `SSPower`)**:
+   - Area Power Controllers (APC), 5 MJ SMES substation storage units, power channels (`EQUIP`, `LIGHT`, `ENVIRON`), and blackout/brownout simulation.
+5. **Rust-g Native & Managed FFI Bridge (`RustGBridge`)**:
    - C# native fallback and FFI routing for BYOND external library calls (`call_ext` / `rust_g.dll`):
      - SHA256 / MD5 cryptographic hashing (`rustg_hash_string`, `rustg_hash_file`).
      - 2D/3D Simplex/Perlin noise algorithms for asteroid and mining map generation (`rustg_noise_2d`).
      - High-speed JSON validation and formatting (`rustg_json_is_valid`).
-4. **TGUI Web Interface Manager (`TGUIManager`)**:
-   - Manages datum controller state synchronization and WebSocket action handling (`ui_data`, `ui_act`) for modern React-based SS13 interfaces.
+6. **Live TGUI Web & 2D Interactive Radar (`TGUIManager`, `TGUIHttpServer`)**:
+   - Live HTTP/WebSocket server (`http://localhost:8080/`) providing real-time telemetry, bi-directional button actions (`Vent Air`, `Airlocks`), and an interactive 2D Canvas map radar with click-to-inspect tile diagnostics.
 
 ---
 
@@ -125,7 +131,7 @@ The compiled binary will be placed at `bin\DMToCSharp.exe`.
 
 ### Compiling DreamMaker to C# (DM -> C#)
 
-Translate a `.dm` or `.dme` source file to C# code:
+Translate a `.dm` source file to C# code:
 
 ```bash
 # Generate C# source file:
@@ -139,6 +145,34 @@ bin\DMToCSharp.exe compile source.dm --run
 
 # Pass preprocessor definitions:
 bin\DMToCSharp.exe compile source.dm -DDEBUG -DMAX_PLAYERS=50 --run
+```
+
+### Batch Project Compilation
+
+Compile hundreds of source files or full `.dme` project trees into consolidated C# code:
+
+```bash
+# Batch compile an entire directory of DM files:
+bin\DMToCSharp.exe project path/to/code output_directory/
+
+# Batch compile a BYOND environment project file:
+bin\DMToCSharp.exe project tgstation.dme output_directory/
+```
+
+### Live TGUI Web Server & 2D Radar
+
+Start the embedded SS13 TGUI web server and interactive 2D map radar:
+
+```bash
+bin\DMToCSharp.exe server 8080
+```
+
+### Inspecting DMM Map Files
+
+Analyze and load `.dmm` map files into the 3D spatial grid:
+
+```bash
+bin\DMToCSharp.exe map-inspect path/to/map.dmm
 ```
 
 ### Transpiling C# to DreamMaker (C# -> DM)
@@ -299,6 +333,8 @@ opendreampiskonut/
 │   │   └── DMObjectTree.cs
 │   ├── Emitter/               # C# code emitter and code generator
 │   │   └── CSharpEmitter.cs
+│   ├── Compiler/              # Large-scale multi-file & DME batch compiler
+│   │   └── ProjectCompiler.cs
 │   ├── CSharpToDM/            # C# to DM transpiler subsystem (lexer, parser, emitter)
 │   │   ├── CSharpAST.cs
 │   │   ├── CSharpLexer.cs
@@ -311,16 +347,24 @@ opendreampiskonut/
 │   │   ├── DMWorld.cs
 │   │   ├── DMBuiltins.cs
 │   │   ├── DMStandardTypes.cs
+│   │   ├── Atmos/             # GasMixture physics, diffusion, SSAir subsystem
+│   │   │   ├── GasMixture.cs
+│   │   │   └── SSAir.cs
+│   │   ├── Power/             # Powernet, APC batteries, SMES grid storage, SSPower
+│   │   │   ├── Powernet.cs
+│   │   │   └── SSPower.cs
 │   │   ├── Maps/              # 3D spatial grid, DMM parser, line-of-sight & movement
 │   │   │   ├── DMMParser.cs
-│   │   │   └── DMSpatialGrid.cs
+│   │   │   ├── DMSpatialGrid.cs
+│   │   │   └── StationMapInspector.cs
 │   │   ├── MC/                # Master Controller, priority queuing, subsystem ticker
 │   │   │   ├── DMSubsystem.cs
 │   │   │   └── MasterController.cs
 │   │   ├── RustG/             # Rust-g FFI bridge (hashing, 2D/3D noise, JSON)
 │   │   │   └── RustGBridge.cs
-│   │   └── TGUI/              # TGUI datum UI states and WebSocket management
-│   │       └── TGUIManager.cs
+│   │   └── TGUI/              # TGUI datum UI states, 2D radar, and HTTP server
+│   │       ├── TGUIManager.cs
+│   │       └── TGUIHttpServer.cs
 │   └── Program.cs             # Command-line driver and test orchestration
 ├── tests/
 │   ├── dm_to_cs/              # DM -> C# compilation and execution integration tests
@@ -331,7 +375,8 @@ opendreampiskonut/
 │   │   ├── 05_ss13_mini_game.dm
 │   │   ├── 06_dmm_map_loading.dm
 │   │   ├── 07_master_controller.dm
-│   │   └── 08_rustg_and_spatial.dm
+│   │   ├── 08_rustg_and_spatial.dm
+│   │   └── 09_batch_project_compilation.dm
 │   └── cs_to_dm/              # C# -> DM reverse transpilation tests
 │       ├── 01_classes_and_methods.cs
 │       └── 02_math_and_logic.cs
