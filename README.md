@@ -1,5 +1,4 @@
-# DMToCSharp 🌌 🔁 ⚡
-
+# DMToCSharp 
 > **A high-performance, bidirectional compiler and transpiler between BYOND's DreamMaker (`.dm` / `.dme`) and C# (`.cs`), complete with a dedicated runtime execution engine and Space Station 13 compatibility layer.**
 >
 > *DreamMaker (DM) ile C# arasında çift yönlü (DM ↔ C#) tam özellikli derleyici, kod dönüştürücü ve çalışma zamanı (Runtime) motoru.*
@@ -28,20 +27,20 @@
 
 ---
 
-## 🌟 Öne Çıkan Özellikler / Key Features
+##  Öne Çıkan Özellikler / Key Features
 
-- 🔄 **Çift Yönlü Dönüşüm (Bidirectional Pipeline)**:
+-  **Çift Yönlü Dönüşüm (Bidirectional Pipeline)**:
   - **DM ➔ C#**: DM AST analizi, OOP sınıf hiyerarşisi, dinamik var çözümleme ve native C# kaynak kod üretimi + `.exe` derlemesi.
   - **C# ➔ DM**: C# Lexer & Parser, sınıf/metot çözümleme ve BYOND `.dm` formatında temiz kod üretimi.
-- ⚡ **Tam Özellikli Ön İşlemci (DM Preprocessor)**:
+-  **Tam Özellikli Ön İşlemci (DM Preprocessor)**:
   - `#include`, `#define`, `#undef`, `#ifdef`, `#ifndef`, `#if`, `#elif`, `#else`, `#endif`.
   - BYOND `.dme` ortam dosyalarını okuma ve proje ağacını otomatik çözümleme.
   - Makro genişletme, `#` stringification ve `##` token pasting desteği.
-- 🧩 **DreamMaker Tip Sistemi ve Nesne Hiyerarşisi (DMObjectTree)**:
+-  **DreamMaker Tip Sistemi ve Nesne Hiyerarşisi (DMObjectTree)**:
   - Standart BYOND tipleri (`/datum`, `/atom`, `/atom/movable`, `/obj`, `/mob`, `/turf`, `/area`, `/client`, `/world`, `/list`).
   - Çok seviyeli kalıtım (Multilevel inheritance) ve geçersiz kılma (`proc` / `var` overrides).
   - Üst metot çağrısı (`..()`) ve dinamik tip doğrulama (`istype()`).
-- 🎮 **Zengin Çalışma Zamanı Kütüphanesi (DM Runtime Engine)**:
+-  **Zengin Çalışma Zamanı Kütüphanesi (DM Runtime Engine)**:
   - `DMValue`: Null, Number, String, List, Object, Path ve Resource türlerini destekleyen dynamic struct.
   - `DMList`: 1-indeksli liste, assosiyatif anahtar-değer eşlemeleri ve liste fonksiyonları (`len`, `Copy`, `Find`, `Cut`, `Join`).
   - `DMWorld`: Global oyun dünyası, çıktı yönetimi (`world << ...`) ve zamanlayıcı.
@@ -49,7 +48,7 @@
 
 ---
 
-## 🏗 Mimari & Tasarım / Architecture
+##  Mimari & Tasarım / Architecture
 
 ```mermaid
 graph TD
@@ -76,7 +75,7 @@ graph TD
 
 ---
 
-## 🚀 Kurulum & Derleme / Installation & Build
+##  Kurulum & Derleme / Installation & Build
 
 Proje Windows ortamında .NET Framework 4.0/4.8 veya .NET SDK ile doğrudan derlenebilir.
 
@@ -94,7 +93,7 @@ Derleme sonucunda `bin\DMToCSharp.exe` çalıştırılabilir dosyası üretilir.
 
 ---
 
-## 📖 Kullanım Kılavuzu / Usage Guide
+##  Kullanım Kılavuzu / Usage Guide
 
 ### 1. DM'den C#'a Derleme (DM -> C#)
 
@@ -148,7 +147,7 @@ bin\DMToCSharp.exe test
 
 ---
 
-## 💻 Örnekler / Examples
+##  Örnekler / Examples
 
 ### Örnek 1: DM Kodunun C#'a Dönüşümü
 
@@ -244,7 +243,7 @@ public class DM_mob_station_ai : DM_mob
 
 ---
 
-## 📁 Proje Yapısı / Project Structure
+##  Proje Yapısı / Project Structure
 
 ```
 opendreampiskonut/
