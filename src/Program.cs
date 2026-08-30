@@ -15,6 +15,7 @@ namespace DMToCSharp
 {
     public class Program
     {
+        [STAThread]
         public static int Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
@@ -461,6 +462,7 @@ namespace DMToCSharp
             Console.WriteLine("================================================================================");
             var server = new Runtime.TGUI.TGUIHttpServer(port);
             server.Start();
+            try { System.Diagnostics.Process.Start(string.Format("http://localhost:{0}/", port)); } catch { }
             Console.WriteLine("Press Enter to stop the server...");
             Console.ReadLine();
             server.Stop();

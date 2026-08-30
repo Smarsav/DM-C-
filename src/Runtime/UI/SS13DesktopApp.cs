@@ -26,20 +26,21 @@ namespace DMToCSharp.Runtime.UI
     {
         private Timer _gameLoopTimer;
         private Panel _canvasPanel;
-        private Label _lblStatus;
         private Label _lblHealth;
         private ProgressBar _pbHealth;
         private Label _lblActiveItem;
         private Label _lblAtmos;
         private Label _lblPower;
         private ProgressBar _pbAPC;
-        private Label _lblAI;
         private TextBox _txtLaws;
         private ListBox _lstChat;
         private TextBox _txtChatInput;
         private ComboBox _cbFreq;
         private Label _lblInspector;
         private Label _lblGameMode;
+        private FacingDir _playerFacing = FacingDir.South;
+        private CombatIntent _currentIntent = CombatIntent.Help;
+        private string _targetZone = "Chest";
 
         public GasMixture StationAir { get; private set; }
         public APC StationAPC { get; private set; }
@@ -90,96 +91,44 @@ namespace DMToCSharp.Runtime.UI
             SSPower.Instance.RegisterAPC(StationAPC);
             SSPower.Instance.RegisterSMES(StationSMES);
 
-            // Initialize 16x16 Station Layout
-            InitializeDefaultStationMap();
+            // Build Authentic 24x24 Space Station Sector
+            StationSectorBuilder.BuildFullStationSector(DMSpatialGrid.Instance);
 
-            // Register Light Source on Player Mob
+            // Spawn player on Command Bridge
             if (LocalPlayer.Mob != null)
             {
-                SSLighting.Instance.RegisterLight(new LightSource(LocalPlayer.Mob, 5, 1.0, "#60a5fa"));
-            }
-
-            // Initial Radio Broadcasts
-            SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, "Welcome to Space Station 13 (.NET Desktop Engine). All systems active.");
-            SSRadio.Instance.Broadcast("Chief Medical Officer", "Medical", SSRadio.FREQ_MEDICAL, "Medbay triage active and ready.");
-            SSRadio.Instance.Broadcast("Head of Security", "Security", SSRadio.FREQ_SECURITY, "Station security level Code Green.");
-        }
-
-        private void InitializeDefaultStationMap()
-        {
-            var grid = DMSpatialGrid.Instance;
-            if (grid.GetTurf(2, 2, 1) != null) return;
-
-            int size = 16;
-            for (int y = 1; y <= size; y++)
-            {
-                for (int x = 1; x <= size; x++)
-                {
-                    bool isOuterWall = (x == 1 || x == size || y == 1 || y == size);
-                    bool isInternalWall = (x == 8 && y != 8 && y != 9) || (y == 8 && x != 8 && x != 9);
-                    bool isAirlock = (x == 8 && (y == 8 || y == 9)) || (y == 8 && (x == 8 || x == 9));
-
-                    var turf = new DM_turf();
-                    turf.x = new DMValue(x);
-                    turf.y = new DMValue(y);
-                    turf.z = new DMValue(1);
-
-                    if (isOuterWall || isInternalWall)
-                    {
-                        turf.name = new DMValue("reinforced wall");
-                        turf.density = new DMValue(true);
-                        turf.opacity = new DMValue(true);
-                    }
-                    else
-                    {
-                        turf.name = new DMValue("station floor");
-                        turf.density = new DMValue(false);
-                        turf.opacity = new DMValue(false);
-
-                        if (isAirlock)
-                        {
-                            var door = new DM_obj();
-                            door.name = new DMValue("secure airlock");
-                            door.density = new DMValue(false);
-                            door.SetVar("bolted", new DMValue(false));
-                            door.SetVar("opened", new DMValue(false));
-                            turf.contents.Add(new DMValue(door));
-                        }
-                    }
-
-                    grid.SetTurf(x, y, 1, turf);
-                }
-            }
-
-            // Spawn player in Bridge at (4, 12, 1)
-            if (LocalPlayer.Mob != null)
-            {
-                LocalPlayer.Mob.x = new DMValue(4);
-                LocalPlayer.Mob.y = new DMValue(12);
+                LocalPlayer.Mob.x = new DMValue(12);
+                LocalPlayer.Mob.y = new DMValue(18);
                 LocalPlayer.Mob.z = new DMValue(1);
-                var spawnTurf = grid.GetTurf(4, 12, 1);
+                var spawnTurf = DMSpatialGrid.Instance.GetTurf(12, 18, 1);
                 if (spawnTurf != null)
                 {
                     LocalPlayer.Mob.loc = new DMValue(spawnTurf);
                     spawnTurf.contents.Add(new DMValue(LocalPlayer.Mob));
                 }
+                SSLighting.Instance.RegisterLight(new LightSource(LocalPlayer.Mob, 6, 1.0, "#60a5fa"));
             }
+
+            // Radio broadcasts
+            SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, "Welcome aboard Space Station 13. All station wings pressurized.");
+            SSRadio.Instance.Broadcast("Captain", "Command", SSRadio.FREQ_COMMAND, "All department heads report to bridge.");
+            SSRadio.Instance.Broadcast("Chief Medical Officer", "Medical", SSRadio.FREQ_MEDICAL, "Medbay triage active and stocked.");
         }
 
         private void InitializeComponent()
         {
-            this.Text = "Space Station 13 - .NET Desktop Game Client & Runtime";
-            this.Size = new Size(1100, 700);
+            this.Text = "Space Station 13 - .NET Game Client";
+            this.Size = new Size(1180, 780);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(9, 13, 22);
             this.ForeColor = Color.FromArgb(226, 232, 240);
             this.Font = new Font("Segoe UI", 9.5f);
             this.KeyPreview = true;
 
-            // 2D Game Canvas Panel
+            // 2D Viewport Canvas Panel
             _canvasPanel = new DoubleBufferedPanel();
             _canvasPanel.Location = new Point(20, 20);
-            _canvasPanel.Size = new Size(520, 520);
+            _canvasPanel.Size = new Size(600, 600);
             _canvasPanel.BackColor = Color.FromArgb(2, 6, 23);
             _canvasPanel.Paint += CanvasPanel_Paint;
             _canvasPanel.MouseClick += CanvasPanel_MouseClick;
@@ -187,77 +136,72 @@ namespace DMToCSharp.Runtime.UI
 
             // Controls Hint
             Label lblHint = new Label();
-            lblHint.Text = "🎮 Keyboard Controls: Use W / A / S / D or Arrow Keys to move your avatar.";
-            lblHint.Location = new Point(20, 550);
-            lblHint.Size = new Size(520, 25);
+            lblHint.Text = "🎮 W / A / S / D or Arrow Keys: Walk around station | Click on airlocks or items to interact";
+            lblHint.Location = new Point(20, 630);
+            lblHint.Size = new Size(600, 25);
             lblHint.ForeColor = Color.FromArgb(96, 165, 250);
             lblHint.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             this.Controls.Add(lblHint);
 
             // Tile Inspector
             _lblInspector = new Label();
-            _lblInspector.Text = "Tile Inspector: Click any tile on the radar to inspect coordinates and contents.";
-            _lblInspector.Location = new Point(20, 580);
-            _lblInspector.Size = new Size(520, 50);
+            _lblInspector.Text = "Location: Command Bridge | Facing: South | Coordinates: (12, 18, 1)";
+            _lblInspector.Location = new Point(20, 660);
+            _lblInspector.Size = new Size(600, 50);
             _lblInspector.ForeColor = Color.FromArgb(148, 163, 184);
             this.Controls.Add(_lblInspector);
 
-            // Right HUD Container
-            int rightX = 560;
+            int rightX = 640;
 
-            // Player Status Box
-            GroupBox gbPlayer = CreateGroupBox("PLAYER & HEALTH HUD", rightX, 20, 500, 110);
-            _lblHealth = new Label { Location = new Point(15, 25), Size = new Size(200, 20), Text = "Health: 100 / 100 HP (Healthy)", ForeColor = Color.FromArgb(16, 185, 129) };
+            // COMBAT INTENT & TARGET DOLL BOX
+            GroupBox gbIntent = CreateGroupBox("INTENT & TARGET ZONE", rightX, 20, 500, 75);
+            Button btnHelp = CreateIntentButton("HELP 🟢", 15, 25, 110, 35, Color.FromArgb(16, 185, 129), () => _currentIntent = CombatIntent.Help);
+            Button btnDisarm = CreateIntentButton("DISARM 🟡", 135, 25, 110, 35, Color.FromArgb(234, 179, 8), () => _currentIntent = CombatIntent.Disarm);
+            Button btnGrab = CreateIntentButton("GRAB 🟠", 255, 25, 110, 35, Color.FromArgb(249, 115, 22), () => _currentIntent = CombatIntent.Grab);
+            Button btnHarm = CreateIntentButton("HARM 🔴", 375, 25, 110, 35, Color.FromArgb(239, 68, 68), () => _currentIntent = CombatIntent.Harm);
+            gbIntent.Controls.AddRange(new Control[] { btnHelp, btnDisarm, btnGrab, btnHarm });
+            this.Controls.Add(gbIntent);
+
+            // PLAYER & HEALTH HUD
+            GroupBox gbPlayer = CreateGroupBox("PLAYER & HEALTH STATUS", rightX, 105, 500, 110);
+            _lblHealth = new Label { Location = new Point(15, 25), Size = new Size(220, 20), Text = "Health: 100 / 100 HP (Healthy)", ForeColor = Color.FromArgb(16, 185, 129) };
             _pbHealth = new ProgressBar { Location = new Point(15, 48), Size = new Size(220, 16), Value = 100 };
-            _lblActiveItem = new Label { Location = new Point(250, 25), Size = new Size(230, 20), Text = "Active Item: Mechanical Crowbar", ForeColor = Color.FromArgb(96, 165, 250) };
+            _lblActiveItem = new Label { Location = new Point(250, 25), Size = new Size(230, 20), Text = "Active Hand: Mechanical Crowbar", ForeColor = Color.FromArgb(96, 165, 250) };
             
             Button btnSwap = CreateButton("Swap Hands", 250, 48, 110, 28, (s, e) => { PlayerInventory.SwapHands(); UpdateUI(); });
             Button btnMed = CreateButton("Use Medkit", 370, 48, 110, 28, (s, e) => { PlayerHealth.HealDamage(DamageType.Brute, 15); UpdateUI(); });
             
-            gbPlayer.Controls.Add(_lblHealth);
-            gbPlayer.Controls.Add(_pbHealth);
-            gbPlayer.Controls.Add(_lblActiveItem);
-            gbPlayer.Controls.Add(btnSwap);
-            gbPlayer.Controls.Add(btnMed);
+            gbPlayer.Controls.AddRange(new Control[] { _lblHealth, _pbHealth, _lblActiveItem, btnSwap, btnMed });
             this.Controls.Add(gbPlayer);
 
-            // Atmos & Power Box
-            GroupBox gbAtmos = CreateGroupBox("ATMOSPHERICS & POWER", rightX, 140, 500, 110);
-            _lblAtmos = new Label { Location = new Point(15, 25), Size = new Size(230, 20), Text = "Atmos: 101.3 kPa | 20.0 °C", ForeColor = Color.FromArgb(56, 189, 248) };
-            _lblPower = new Label { Location = new Point(250, 25), Size = new Size(230, 20), Text = "APC Battery: 100.0%", ForeColor = Color.FromArgb(245, 158, 11) };
+            // ATMOSPHERICS & POWER
+            GroupBox gbAtmos = CreateGroupBox("ATMOSPHERICS & DOORS", rightX, 225, 500, 110);
+            _lblAtmos = new Label { Location = new Point(15, 25), Size = new Size(230, 20), Text = "Pressure: 101.3 kPa | 20.0 °C", ForeColor = Color.FromArgb(56, 189, 248) };
+            _lblPower = new Label { Location = new Point(250, 25), Size = new Size(230, 20), Text = "APC Power: 100.0% Optimal", ForeColor = Color.FromArgb(245, 158, 11) };
             _pbAPC = new ProgressBar { Location = new Point(250, 48), Size = new Size(230, 16), Value = 100 };
             
             Button btnVent = CreateButton("Vent Air", 15, 52, 105, 28, (s, e) => { StationAir.RemoveRatio(0.15); UpdateUI(); });
             Button btnRepress = CreateButton("Repressurize", 125, 52, 110, 28, (s, e) => { StationAir.AdjustMoles(GasType.Oxygen, 5); UpdateUI(); });
-            Button btnDoor = CreateButton("Toggle Airlock", 250, 72, 110, 28, (s, e) => { ToggleNearestAirlock(); UpdateUI(); });
-            Button btnBolt = CreateButton("Bolts", 370, 72, 110, 28, (s, e) => { ToggleAirlockBolts(); UpdateUI(); });
+            Button btnDoor = CreateButton("Open Airlock", 250, 72, 110, 28, (s, e) => { ToggleFacingAirlock(); UpdateUI(); });
+            Button btnBolt = CreateButton("Toggle Bolts", 370, 72, 110, 28, (s, e) => { ToggleAirlockBolts(); UpdateUI(); });
 
-            gbAtmos.Controls.Add(_lblAtmos);
-            gbAtmos.Controls.Add(_lblPower);
-            gbAtmos.Controls.Add(_pbAPC);
-            gbAtmos.Controls.Add(btnVent);
-            gbAtmos.Controls.Add(btnRepress);
-            gbAtmos.Controls.Add(btnDoor);
-            gbAtmos.Controls.Add(btnBolt);
+            gbAtmos.Controls.AddRange(new Control[] { _lblAtmos, _lblPower, _pbAPC, btnVent, btnRepress, btnDoor, btnBolt });
             this.Controls.Add(gbAtmos);
 
-            // Game Mode & AI Laws Box
-            GroupBox gbAI = CreateGroupBox("GAME MODE & SILICON LAWS", rightX, 260, 500, 120);
-            _lblGameMode = new Label { Location = new Point(15, 22), Size = new Size(460, 20), Text = "Game Mode: TRAITOR (20 TC) | Objective: Assassinate RD", ForeColor = Color.FromArgb(245, 158, 11) };
+            // GAME MODE & SILICON LAWS
+            GroupBox gbAI = CreateGroupBox("GAME MODE & AI TERMINAL", rightX, 345, 500, 120);
+            _lblGameMode = new Label { Location = new Point(15, 22), Size = new Size(460, 20), Text = "Mode: TRAITOR (20 TC) | Objective: Assassinate RD", ForeColor = Color.FromArgb(245, 158, 11) };
             _txtLaws = new TextBox { Location = new Point(15, 45), Size = new Size(340, 65), Multiline = true, ReadOnly = true, BackColor = Color.FromArgb(15, 23, 42), ForeColor = Color.FromArgb(252, 165, 165), ScrollBars = ScrollBars.Vertical };
             _txtLaws.Text = "Law 1: You may not injure a human being.\r\nLaw 2: Obey human orders.\r\nLaw 3: Protect self.";
             
             Button btnLockdown = CreateButton("AI Lockdown", 365, 45, 120, 30, (s, e) => { StationAI.EmergencyLockdown(); UpdateUI(); });
             Button btnCorp = CreateButton("Corporate Laws", 365, 80, 120, 30, (s, e) => { StationAI.Laws.ApplyPreset("Corporate"); UpdateUI(); });
 
-            gbAI.Controls.Add(_lblGameMode);
-            gbAI.Controls.Add(_txtLaws);
-            gbAI.Controls.Add(btnLockdown);
-            gbAI.Controls.Add(btnCorp);
+            gbAI.Controls.AddRange(new Control[] { _lblGameMode, _txtLaws, btnLockdown, btnCorp });
             this.Controls.Add(gbAI);
 
-            // Telecomms & Radio Chat
-            GroupBox gbChat = CreateGroupBox("TELECOMMS & RADIO TRANSCEIVER", rightX, 390, 500, 240);
+            // TELECOMMS & RADIO CHAT
+            GroupBox gbChat = CreateGroupBox("TELECOMMS & RADIO TRANSCEIVER", rightX, 475, 500, 240);
             _lstChat = new ListBox { Location = new Point(15, 25), Size = new Size(470, 150), BackColor = Color.FromArgb(2, 6, 23), ForeColor = Color.FromArgb(226, 232, 240), Font = new Font("Consolas", 9f) };
             
             _cbFreq = new ComboBox { Location = new Point(15, 185), Size = new Size(110, 25), DropDownStyle = ComboBoxStyle.DropDownList, BackColor = Color.FromArgb(15, 23, 42), ForeColor = Color.FromArgb(96, 165, 250) };
@@ -269,18 +213,15 @@ namespace DMToCSharp.Runtime.UI
 
             Button btnSend = CreateButton("Transmit", 405, 184, 80, 27, (s, e) => SendRadioMessage());
 
-            gbChat.Controls.Add(_lstChat);
-            gbChat.Controls.Add(_cbFreq);
-            gbChat.Controls.Add(_txtChatInput);
-            gbChat.Controls.Add(btnSend);
+            gbChat.Controls.AddRange(new Control[] { _lstChat, _cbFreq, _txtChatInput, btnSend });
             this.Controls.Add(gbChat);
 
             // KeyDown Handler
             this.KeyDown += SS13DesktopApp_KeyDown;
 
-            // 100ms Game Loop Timer
+            // 60 FPS Game Loop Timer
             _gameLoopTimer = new Timer();
-            _gameLoopTimer.Interval = 100;
+            _gameLoopTimer.Interval = 33; // ~30-60 FPS
             _gameLoopTimer.Tick += GameLoopTimer_Tick;
             _gameLoopTimer.Start();
 
@@ -317,6 +258,24 @@ namespace DMToCSharp.Runtime.UI
             return btn;
         }
 
+        private Button CreateIntentButton(string text, int x, int y, int w, int h, Color color, Action onClick)
+        {
+            var btn = new Button
+            {
+                Text = text,
+                Location = new Point(x, y),
+                Size = new Size(w, h),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(20, 30, 48),
+                ForeColor = color,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btn.FlatAppearance.BorderColor = color;
+            btn.Click += (s, e) => { onClick(); UpdateUI(); };
+            return btn;
+        }
+
         private void SendRadioMessage()
         {
             string text = _txtChatInput.Text.Trim();
@@ -333,27 +292,29 @@ namespace DMToCSharp.Runtime.UI
             UpdateChat();
         }
 
-        private void ToggleNearestAirlock()
+        private void ToggleFacingAirlock()
         {
             var grid = DMSpatialGrid.Instance;
-            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1;
-            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1;
+            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 12;
+            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 18;
 
-            for (int dx = -1; dx <= 1; dx++)
+            int tx = px;
+            int ty = py;
+            if (_playerFacing == FacingDir.North) ty++;
+            else if (_playerFacing == FacingDir.South) ty--;
+            else if (_playerFacing == FacingDir.East) tx++;
+            else if (_playerFacing == FacingDir.West) tx--;
+
+            var t = grid.GetTurf(tx, ty, 1);
+            if (t != null)
             {
-                for (int dy = -1; dy <= 1; dy++)
+                foreach (var c in t.contents)
                 {
-                    var t = grid.GetTurf(px + dx, py + dy, 1);
-                    if (t != null)
+                    if (c.IsObject && c.AsObject.name.AsString.ToLowerInvariant().Contains("airlock"))
                     {
-                        foreach (var c in t.contents)
-                        {
-                            if (c.IsObject && c.AsObject.name.AsString.ToLowerInvariant().Contains("airlock"))
-                            {
-                                bool op = c.AsObject.GetVar("opened").ToBool();
-                                c.AsObject.SetVar("opened", new DMValue(!op));
-                            }
-                        }
+                        bool op = c.AsObject.GetVar("opened").ToBool();
+                        c.AsObject.SetVar("opened", new DMValue(!op));
+                        SSAudio.Instance.PlaySound(op ? "door_close.ogg" : "door_open.ogg", tx, ty, 1);
                     }
                 }
             }
@@ -362,8 +323,8 @@ namespace DMToCSharp.Runtime.UI
         private void ToggleAirlockBolts()
         {
             var grid = DMSpatialGrid.Instance;
-            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1;
-            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1;
+            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 12;
+            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 18;
 
             for (int dx = -1; dx <= 1; dx++)
             {
@@ -390,10 +351,11 @@ namespace DMToCSharp.Runtime.UI
             if (_txtChatInput.Focused) return;
 
             string dir = null;
-            if (e.KeyCode == Keys.W || e.KeyCode == Keys.Up) dir = "w";
-            else if (e.KeyCode == Keys.S || e.KeyCode == Keys.Down) dir = "s";
-            else if (e.KeyCode == Keys.A || e.KeyCode == Keys.Left) dir = "a";
-            else if (e.KeyCode == Keys.D || e.KeyCode == Keys.Right) dir = "d";
+            if (e.KeyCode == Keys.W || e.KeyCode == Keys.Up) { dir = "w"; _playerFacing = FacingDir.North; }
+            else if (e.KeyCode == Keys.S || e.KeyCode == Keys.Down) { dir = "s"; _playerFacing = FacingDir.South; }
+            else if (e.KeyCode == Keys.A || e.KeyCode == Keys.Left) { dir = "a"; _playerFacing = FacingDir.West; }
+            else if (e.KeyCode == Keys.D || e.KeyCode == Keys.Right) { dir = "d"; _playerFacing = FacingDir.East; }
+            else if (e.KeyCode == Keys.Space || e.KeyCode == Keys.E) { ToggleFacingAirlock(); e.Handled = true; return; }
 
             if (dir != null)
             {
@@ -417,15 +379,31 @@ namespace DMToCSharp.Runtime.UI
                 PlayerHealth.CurrentHealth, PlayerHealth.MaxHealth, PlayerHealth.Status);
             _pbHealth.Value = Math.Max(0, Math.Min(100, (int)((PlayerHealth.CurrentHealth / Math.Max(1, PlayerHealth.MaxHealth)) * 100)));
 
-            _lblActiveItem.Text = "Active Item: " + (PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "Empty Hand");
+            _lblActiveItem.Text = "Active Hand: " + (PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "Empty Hand");
 
-            _lblAtmos.Text = string.Format("Atmos: {0:F1} kPa | {1:F1} °C", StationAir.Pressure, StationAir.Temperature - 273.15);
-            _lblPower.Text = string.Format("APC Battery: {0:F1}% ({1:F0} W)", StationAPC.ChargePercentage, StationAPC.TotalLoad);
+            _lblAtmos.Text = string.Format("Pressure: {0:F1} kPa | {1:F1} °C", StationAir.Pressure, StationAir.Temperature - 273.15);
+            _lblPower.Text = string.Format("APC Power: {0:F1}% ({1:F0} W)", StationAPC.ChargePercentage, StationAPC.TotalLoad);
             _pbAPC.Value = Math.Max(0, Math.Min(100, (int)StationAPC.ChargePercentage));
 
             _txtLaws.Text = string.Join("\r\n", StationAI.Laws.GetFormattedLaws().ToArray());
 
+            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 12;
+            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 18;
+            string roomName = GetRoomName(px, py);
+            _lblInspector.Text = string.Format("Location: {0} | Facing: {1} | Coordinates: ({2}, {3}, 1) | Intent: {4}",
+                roomName, _playerFacing, px, py, _currentIntent);
+
             UpdateChat();
+        }
+
+        private string GetRoomName(int x, int y)
+        {
+            if (x >= 11 && x <= 14 && y >= 17) return "Command Bridge";
+            if (x >= 15 && y >= 17) return "Medbay Surgery & Triage";
+            if (x <= 10 && y <= 10) return "Security Department & Brig";
+            if (x >= 15 && y <= 10) return "Atmospherics & Engineering";
+            if (x < 3 || x > 22 || y < 3 || y > 22) return "Deep Space";
+            return "Primary Station Hallway";
         }
 
         private void UpdateChat()
@@ -449,116 +427,123 @@ namespace DMToCSharp.Runtime.UI
         {
             System.Drawing.Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.NearestNeighbor;
 
             var grid = DMSpatialGrid.Instance;
-            int size = 16;
-            float tileSize = (float)_canvasPanel.Width / size;
+            int viewTiles = 13; // 13x13 viewport
+            float tileSize = (float)_canvasPanel.Width / viewTiles;
 
-            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1;
-            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1;
+            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 12;
+            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 18;
 
-            for (int y = size; y >= 1; y--)
+            int startX = px - viewTiles / 2;
+            int startY = py + viewTiles / 2;
+
+            for (int dy = 0; dy < viewTiles; dy++)
             {
-                for (int x = 1; x <= size; x++)
+                for (int dx = 0; dx < viewTiles; dx++)
                 {
-                    float screenX = (x - 1) * tileSize;
-                    float screenY = (size - y) * tileSize;
+                    int gx = startX + dx;
+                    int gy = startY - dy;
 
-                    var t = grid.GetTurf(x, y, 1);
-                    string name = t != null ? t.name.AsString : "space";
-                    bool isWall = t != null && (t.density.ToBool() || name.Contains("wall"));
-                    bool isAirlock = false;
-                    bool isPlayer = (x == px && y == py);
+                    float screenX = dx * tileSize;
+                    float screenY = dy * tileSize;
 
-                    if (t != null)
+                    var t = grid.GetTurf(gx, gy, 1);
+                    if (t == null || t.name.AsString == "space")
                     {
+                        SS13PixelRenderer.DrawSpaceTile(g, screenX, screenY, tileSize, gx * 37 + gy * 91);
+                        continue;
+                    }
+
+                    string turfName = t.name.AsString.ToLowerInvariant();
+                    if (turfName.Contains("reinforced wall") || turfName.Contains("wall"))
+                    {
+                        SS13PixelRenderer.DrawReinforcedWall(g, screenX, screenY, tileSize, 0);
+                    }
+                    else if (turfName.Contains("window"))
+                    {
+                        SS13PixelRenderer.DrawGlassWindow(g, screenX, screenY, tileSize);
+                    }
+                    else
+                    {
+                        bool isHazard = (gx == 11 || gx == 14 || gy == 11 || gy == 14);
+                        SS13PixelRenderer.DrawStationFloor(g, screenX, screenY, tileSize, isHazard);
+
+                        // Draw Objects on Turf
                         foreach (var c in t.contents)
                         {
-                            if (c.IsObject && c.AsObject.name.AsString.ToLowerInvariant().Contains("airlock"))
+                            if (c.IsObject && c.AsObject != null)
                             {
-                                isAirlock = true;
+                                string oName = c.AsObject.name.AsString.ToLowerInvariant();
+                                if (oName.Contains("airlock"))
+                                {
+                                    bool op = c.AsObject.GetVar("opened").ToBool();
+                                    bool b = c.AsObject.GetVar("bolted").ToBool();
+                                    SS13PixelRenderer.DrawAirlock(g, screenX, screenY, tileSize, op, b);
+                                }
+                                else if (oName.Contains("console") || oName.Contains("computer"))
+                                {
+                                    SS13PixelRenderer.DrawConsole(g, screenX, screenY, tileSize, oName);
+                                }
                             }
                         }
                     }
 
-                    // Base Tile Drawing
-                    if (isWall)
-                    {
-                        using (Brush b = new SolidBrush(Color.FromArgb(51, 65, 85)))
-                            g.FillRectangle(b, screenX, screenY, tileSize, tileSize);
-                        using (Pen p = new Pen(Color.FromArgb(71, 85, 105), 1.5f))
-                            g.DrawRectangle(p, screenX + 1, screenY + 1, tileSize - 2, tileSize - 2);
-                    }
-                    else if (isAirlock)
-                    {
-                        using (Brush b = new SolidBrush(Color.FromArgb(245, 158, 11)))
-                            g.FillRectangle(b, screenX, screenY, tileSize - 1, tileSize - 1);
-                    }
-                    else
-                    {
-                        using (Brush b = new SolidBrush(Color.FromArgb(30, 41, 59)))
-                            g.FillRectangle(b, screenX, screenY, tileSize - 1, tileSize - 1);
-                        using (Pen p = new Pen(Color.FromArgb(40, 53, 75), 1f))
-                            g.DrawRectangle(p, screenX, screenY, tileSize - 1, tileSize - 1);
-                    }
-
-                    // Dynamic Lighting Overlay
-                    double lum = SSLighting.Instance.GetTileLuminosity(x, y, 1);
-                    double darkness = Math.Max(0.0, 1.0 - (lum > 0 ? lum : 0.2));
+                    // Dynamic Lighting Occlusion Circle
+                    double distFromPlayer = Math.Sqrt((gx - px) * (gx - px) + (gy - py) * (gy - py));
+                    double darkness = Math.Max(0.0, Math.Min(0.85, (distFromPlayer - 2.5) / 5.0));
                     if (darkness > 0)
                     {
-                        int alpha = (int)(darkness * 180);
-                        using (Brush darkBrush = new SolidBrush(Color.FromArgb(alpha, 2, 6, 23)))
-                        {
-                            g.FillRectangle(darkBrush, screenX, screenY, tileSize, tileSize);
-                        }
-                    }
-
-                    // Player Drawing
-                    if (isPlayer)
-                    {
-                        using (Brush pb = new SolidBrush(Color.FromArgb(56, 189, 248)))
-                        {
-                            float radius = tileSize * 0.35f;
-                            g.FillEllipse(pb, screenX + tileSize / 2 - radius, screenY + tileSize / 2 - radius, radius * 2, radius * 2);
-                        }
-                        using (Pen pp = new Pen(Color.White, 2f))
-                        {
-                            float radius = tileSize * 0.35f;
-                            g.DrawEllipse(pp, screenX + tileSize / 2 - radius, screenY + tileSize / 2 - radius, radius * 2, radius * 2);
-                        }
+                        using (Brush db = new SolidBrush(Color.FromArgb((int)(darkness * 255), 2, 6, 23)))
+                            g.FillRectangle(db, screenX, screenY, tileSize, tileSize);
                     }
                 }
             }
+
+            // Draw Centered Player Avatar
+            float playerScreenX = (viewTiles / 2) * tileSize;
+            float playerScreenY = (viewTiles / 2) * tileSize;
+            string activeItem = PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "";
+            SS13PixelRenderer.DrawPlayerMob(g, playerScreenX, playerScreenY, tileSize, _playerFacing, activeItem);
         }
 
         private void CanvasPanel_MouseClick(object sender, MouseEventArgs e)
         {
             var grid = DMSpatialGrid.Instance;
-            int size = 16;
-            float tileSize = (float)_canvasPanel.Width / size;
+            int viewTiles = 13;
+            float tileSize = (float)_canvasPanel.Width / viewTiles;
 
-            int gridX = (int)(e.X / tileSize) + 1;
-            int gridY = size - (int)(e.Y / tileSize);
+            int px = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 12;
+            int py = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 18;
 
-            var t = grid.GetTurf(gridX, gridY, 1);
+            int startX = px - viewTiles / 2;
+            int startY = py + viewTiles / 2;
+
+            int dx = (int)(e.X / tileSize);
+            int dy = (int)(e.Y / tileSize);
+
+            int clickX = startX + dx;
+            int clickY = startY - dy;
+
+            var t = grid.GetTurf(clickX, clickY, 1);
             if (t != null)
             {
-                string contents = "None";
-                if (t.contents.Length > 0)
+                // If clicked airlock or console, interact with it!
+                foreach (var c in t.contents)
                 {
-                    List<string> cNames = new List<string>();
-                    foreach (var c in t.contents)
+                    if (c.IsObject && c.AsObject != null)
                     {
-                        if (c.IsObject && c.AsObject != null)
-                            cNames.Add(c.AsObject.name.AsString);
+                        string oName = c.AsObject.name.AsString.ToLowerInvariant();
+                        if (oName.Contains("airlock"))
+                        {
+                            bool op = c.AsObject.GetVar("opened").ToBool();
+                            c.AsObject.SetVar("opened", new DMValue(!op));
+                            SSAudio.Instance.PlaySound(op ? "door_close.ogg" : "door_open.ogg", clickX, clickY, 1);
+                        }
                     }
-                    if (cNames.Count > 0) contents = string.Join(", ", cNames.ToArray());
                 }
-                double lum = SSLighting.Instance.GetTileLuminosity(gridX, gridY, 1);
-
-                _lblInspector.Text = string.Format("Tile ({0}, {1}, 1): {2} | Density: {3} | Lumens: {4:F2} | Contents: {5}",
-                    gridX, gridY, t.name.AsString, t.density.ToBool() ? "Solid Wall" : "Passable Floor", lum, contents);
+                UpdateUI();
             }
         }
     }
