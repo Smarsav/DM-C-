@@ -9,6 +9,7 @@ if not exist "%DOTNET%" set DOTNET=dotnet
 
 set COMPILER_DLL=%~dp0OpenDream\DMCompiler\bin\Release\net5.0\DMCompiler.dll
 set SERVER_DLL=%~dp0OpenDream\OpenDreamServer\bin\Release\net5.0\OpenDreamServer.dll
+set CLIENT_EXE=%~dp0OpenDream\OpenDreamClient\bin\Release\net5.0-windows\OpenDreamClient.exe
 set CLIENT_DLL=%~dp0OpenDream\OpenDreamClient\bin\Release\net5.0-windows\OpenDreamClient.dll
 
 echo [1/3] Compiling station environment...
@@ -20,7 +21,11 @@ start "OpenDream Server" "%DOTNET%" exec --roll-forward LatestMajor "%SERVER_DLL
 ping -n 3 127.0.0.1 >nul
 
 echo [3/3] Launching OpenDream C# Client Window...
-start "OpenDream Client" "%DOTNET%" exec --roll-forward LatestMajor "%CLIENT_DLL%"
+if exist "%CLIENT_EXE%" (
+    start "" "%CLIENT_EXE%"
+) else (
+    start "OpenDream Client" "%DOTNET%" exec --roll-forward LatestMajor "%CLIENT_DLL%"
+)
 
 echo ======================================================================
 echo  OpenDream SS13 is active! (Connect to 127.0.0.1:25566)
