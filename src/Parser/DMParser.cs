@@ -694,6 +694,11 @@ namespace DMToCSharp.Parser
                     }
                 }
 
+                if (Match(TokenType.As))
+                {
+                    Advance(); // skip type specifier like 'anything', 'num', 'mob' etc.
+                }
+
                 if (Match(TokenType.In))
                 {
                     DMASTExpression container = ParseExpression();
