@@ -44,7 +44,6 @@ namespace DMToCSharp.Runtime.Maps
             int len = lines.Length;
 
             // Phase 1: Parse tile dictionary definitions
-            // Example: "aaa" = (/turf/open/floor{icon_state = "floor"}, /area/hallway)
             while (i < len)
             {
                 string line = lines[i].Trim();
@@ -54,9 +53,24 @@ namespace DMToCSharp.Runtime.Maps
                     break;
                 }
 
-                if (line.StartsWith("\"") && line.Contains("=") && line.Contains("("))
+                if (line.StartsWith("\"") && line.Contains("="))
                 {
-                    ParseTileDefinition(line, model);
+                    StringBuilder tileDefSb = new StringBuilder();
+                    tileDefSb.Append(line);
+                    if (!line.Contains(")"))
+                    {
+                        while (i + 1 < len)
+                        {
+                            i++;
+                            string nextLine = lines[i].Trim();
+                            tileDefSb.Append(" ").Append(nextLine);
+                            if (nextLine.Contains(")"))
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    ParseTileDefinition(tileDefSb.ToString(), model);
                 }
 
                 i++;

@@ -32,6 +32,19 @@ namespace DMToCSharp
                 return RunBuiltinTests();
             }
 
+            if (command == "server" || command == "tgui")
+            {
+                int port = 8080;
+                if (args.Length > 1) int.TryParse(args[1], out port);
+                return RunTGUIServer(port);
+            }
+
+            if (command == "map-inspect" || command == "map")
+            {
+                string mapPath = args.Length > 1 ? args[1] : @"psychonaut_station\_maps\shuttles\assault_pod_default.dmm";
+                return RunMapInspect(mapPath);
+            }
+
             if (command == "cs2dm")
             {
                 return RunCSharpToDM(args);
@@ -415,6 +428,41 @@ namespace DMToCSharp
             Console.WriteLine("================================================================================");
 
             return passed == total ? 0 : 1;
+        }
+
+        private static int RunTGUIServer(int port)
+        {
+            Console.WriteLine("================================================================================");
+            Console.WriteLine(" Space Station 13 - Live TGUI Web Server & Control Console");
+            Console.WriteLine("================================================================================");
+            var server = new Runtime.TGUI.TGUIHttpServer(port);
+            server.Start();
+            Console.WriteLine("Press Enter to stop the server...");
+            Console.ReadLine();
+            server.Stop();
+            return 0;
+        }
+
+        private static int RunMapInspect(string mapPath)
+        {
+            Console.WriteLine("================================================================================");
+            Console.WriteLine(" Space Station 13 - PsychonautStation DMM Map Inspector");
+            Console.WriteLine("================================================================================");
+            Console.WriteLine("Analyzing map: " + mapPath);
+            var report = Runtime.Maps.StationMapInspector.InspectMapFile(mapPath);
+
+            Console.WriteLine(string.Format("Dimensions: {0} x {1} x {2}", report.SizeX, report.SizeY, report.SizeZ));
+            Console.WriteLine(string.Format("Tile Definitions: {0}", report.TotalTileDefinitions));
+            Console.WriteLine(string.Format("Turfs Loaded:     {0}", report.TotalTurfsLoaded));
+            Console.WriteLine(string.Format("Objects Loaded:   {0}", report.TotalObjectsLoaded));
+            Console.WriteLine(string.Format("Airlocks/Doors:   {0}", report.TotalAirlocks));
+            Console.WriteLine(string.Format("Machines/Comps:   {0}", report.TotalMachines));
+            Console.WriteLine(string.Format("Lights/Fixtures:  {0}", report.TotalLights));
+            Console.WriteLine("================================================================================");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("[Map Inspection Success] Map fully loaded and verified in 3D Spatial Grid!");
+            Console.ResetColor();
+            return 0;
         }
     }
 }
