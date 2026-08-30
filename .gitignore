@@ -7,6 +7,7 @@
 
 # External cloned game repositories
 psychonaut_station/
+OpenDream/
 external/
 compiled_*/
 compiled_csharp/
