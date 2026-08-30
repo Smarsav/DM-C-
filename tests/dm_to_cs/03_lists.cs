@@ -17,6 +17,7 @@ namespace DMCompiled
     {
         public static DMValue main()
         {
+            DMValue __dot = DMValue.Null;
             DMBuiltins.world_output((DMValue)"=== DM Lists Test ===");
             DMValue crew = DMBuiltins.list_init(new object[] { (DMValue)"Alice", (DMValue)"Bob", (DMValue)"Charlie", (DMValue)"David" });
             DMBuiltins.world_output(DMValue.Format("Crew count: ", crew.GetVar("len")));
@@ -33,7 +34,7 @@ namespace DMCompiled
             roles[(DMValue)"Charlie"] = (DMValue)"Clown";
             DMBuiltins.world_output(DMValue.Format("Charlie's role: ", roles[(DMValue)"Charlie"]));
             DMBuiltins.world_output((DMValue)"Lists test completed!");
-            return DMValue.Null;
+            return __dot;
         }
 
     }

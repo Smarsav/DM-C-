@@ -438,6 +438,95 @@ namespace DMToCSharp.Runtime
             return DMValue.Null;
         }
 
+        public static DMValue locate(DMValue xVal, DMValue yVal, DMValue zVal)
+        {
+            int x = (int)xVal.ToNumber();
+            int y = (int)yVal.ToNumber();
+            int z = (int)zVal.ToNumber();
+            var turf = Maps.DMSpatialGrid.Instance.GetTurf(x, y, z);
+            return turf != null ? new DMValue(turf) : DMValue.Null;
+        }
+
+        // Spatial & Map Builtins
+        public static DMValue range(DMValue distVal, DMValue centerVal)
+        {
+            int dist = (int)distVal.ToNumber();
+            DM_atom center = centerVal.IsObject ? centerVal.AsObject as DM_atom : null;
+            return new DMValue(Maps.DMSpatialGrid.Instance.GetRange(center, dist));
+        }
+
+        public static DMValue orange(DMValue distVal, DMValue centerVal)
+        {
+            int dist = (int)distVal.ToNumber();
+            DM_atom center = centerVal.IsObject ? centerVal.AsObject as DM_atom : null;
+            return new DMValue(Maps.DMSpatialGrid.Instance.GetOrange(center, dist));
+        }
+
+        public static DMValue view(DMValue distVal, DMValue centerVal)
+        {
+            int dist = (int)distVal.ToNumber();
+            DM_atom center = centerVal.IsObject ? centerVal.AsObject as DM_atom : null;
+            return new DMValue(Maps.DMSpatialGrid.Instance.GetView(center, dist));
+        }
+
+        public static DMValue oview(DMValue distVal, DMValue centerVal)
+        {
+            int dist = (int)distVal.ToNumber();
+            DM_atom center = centerVal.IsObject ? centerVal.AsObject as DM_atom : null;
+            return new DMValue(Maps.DMSpatialGrid.Instance.GetOView(center, dist));
+        }
+
+        public static DMValue get_dist(DMValue aVal, DMValue bVal)
+        {
+            DM_atom a = aVal.IsObject ? aVal.AsObject as DM_atom : null;
+            DM_atom b = bVal.IsObject ? bVal.AsObject as DM_atom : null;
+            return (double)Maps.DMSpatialGrid.GetDist(a, b);
+        }
+
+        public static DMValue get_dir(DMValue aVal, DMValue bVal)
+        {
+            DM_atom a = aVal.IsObject ? aVal.AsObject as DM_atom : null;
+            DM_atom b = bVal.IsObject ? bVal.AsObject as DM_atom : null;
+            return (double)Maps.DMSpatialGrid.GetDir(a, b);
+        }
+
+        public static DMValue get_step(DMValue refVal, DMValue dirVal)
+        {
+            DM_atom atom = refVal.IsObject ? refVal.AsObject as DM_atom : null;
+            int dir = (int)dirVal.ToNumber();
+            var stepTurf = Maps.DMSpatialGrid.Instance.GetStep(atom, dir);
+            return stepTurf != null ? new DMValue(stepTurf) : DMValue.Null;
+        }
+
+        public static DMValue step(DMValue refVal, DMValue dirVal)
+        {
+            DM_atom_movable movable = refVal.IsObject ? refVal.AsObject as DM_atom_movable : null;
+            int dir = (int)dirVal.ToNumber();
+            return Maps.DMSpatialGrid.Instance.Step(movable, dir) ? 1.0 : 0.0;
+        }
+
+        // Rust-g FFI Builtin
+        public static DMValue call_ext(DMValue dllVal, DMValue procVal, params DMValue[] args)
+        {
+            string dll = dllVal.AsString;
+            string proc = procVal.AsString;
+            List<string> strArgs = new List<string>();
+            if (args != null)
+            {
+                foreach (var a in args) strArgs.Add(a.AsString);
+            }
+            string result = RustG.RustGBridge.Call(proc, strArgs.ToArray());
+            return new DMValue(result);
+        }
+
+        // Map Loader Builtin
+        public static DMValue load_map(DMValue dmmContentVal)
+        {
+            string content = dmmContentVal.AsString;
+            var model = Maps.DMMParser.Parse(content);
+            return new DMValue(model != null);
+        }
+
         public static DMValue initial(DMValue obj, string varName)
         {
             return obj.GetVar(varName);

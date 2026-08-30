@@ -48,6 +48,28 @@ namespace DMToCSharp.Runtime
             DMWorld.Instance.Contents.Add(this);
         }
 
+        public override DMValue GetVar(string varName)
+        {
+            if (string.Equals(varName, "x", StringComparison.OrdinalIgnoreCase)) return x;
+            if (string.Equals(varName, "y", StringComparison.OrdinalIgnoreCase)) return y;
+            if (string.Equals(varName, "z", StringComparison.OrdinalIgnoreCase)) return z;
+            if (string.Equals(varName, "icon_state", StringComparison.OrdinalIgnoreCase)) return icon_state;
+            if (string.Equals(varName, "density", StringComparison.OrdinalIgnoreCase)) return density;
+            if (string.Equals(varName, "opacity", StringComparison.OrdinalIgnoreCase)) return opacity;
+            return base.GetVar(varName);
+        }
+
+        public override DMValue SetVar(string varName, DMValue value)
+        {
+            if (string.Equals(varName, "x", StringComparison.OrdinalIgnoreCase)) { x = value; return value; }
+            if (string.Equals(varName, "y", StringComparison.OrdinalIgnoreCase)) { y = value; return value; }
+            if (string.Equals(varName, "z", StringComparison.OrdinalIgnoreCase)) { z = value; return value; }
+            if (string.Equals(varName, "icon_state", StringComparison.OrdinalIgnoreCase)) { icon_state = value; return value; }
+            if (string.Equals(varName, "density", StringComparison.OrdinalIgnoreCase)) { density = value; return value; }
+            if (string.Equals(varName, "opacity", StringComparison.OrdinalIgnoreCase)) { opacity = value; return value; }
+            return base.SetVar(varName, value);
+        }
+
         public override DMValue Del()
         {
             DMWorld.Instance.Contents.Remove(this);

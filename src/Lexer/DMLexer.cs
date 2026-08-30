@@ -64,6 +64,8 @@ namespace DMToCSharp.Lexer
             Stack<int> indentStack = new Stack<int>();
             indentStack.Push(0);
             int bracketDepth = 0;
+            StringBuilder verbatimSb = null;
+            Location verbatimLoc = default(Location);
 
             string currentFile = "unknown";
             int lastLineNum = 1;
@@ -73,6 +75,23 @@ namespace DMToCSharp.Lexer
                 currentFile = lineObj.SourceFile;
                 lastLineNum = lineObj.SourceLineNumber;
                 string rawLine = lineObj.Content;
+
+                if (verbatimSb != null)
+                {
+                    int endIdx = rawLine.IndexOf("\"}");
+                    if (endIdx != -1)
+                    {
+                        verbatimSb.Append(rawLine.Substring(0, endIdx));
+                        tokens.Add(new Token(TokenType.VerbatimString, verbatimSb.ToString(), verbatimLoc, verbatimSb.ToString()));
+                        verbatimSb = null;
+                        rawLine = rawLine.Substring(endIdx + 2);
+                    }
+                    else
+                    {
+                        verbatimSb.AppendLine(rawLine);
+                        continue;
+                    }
+                }
 
                 if (string.IsNullOrWhiteSpace(rawLine))
                 {
@@ -103,7 +122,7 @@ namespace DMToCSharp.Lexer
                     }
                 }
 
-                TokenizeLine(rawLine, currentFile, lastLineNum, tokens, ref bracketDepth);
+                TokenizeLine(rawLine, currentFile, lastLineNum, tokens, ref bracketDepth, ref verbatimSb, ref verbatimLoc);
 
                 if (bracketDepth == 0 && tokens.Count > 0 && tokens[tokens.Count - 1].Type != TokenType.Newline && tokens[tokens.Count - 1].Type != TokenType.Indent && tokens[tokens.Count - 1].Type != TokenType.Dedent)
                 {
@@ -133,7 +152,7 @@ namespace DMToCSharp.Lexer
             return count;
         }
 
-        private void TokenizeLine(string line, string file, int lineNum, List<Token> tokens, ref int bracketDepth)
+        private void TokenizeLine(string line, string file, int lineNum, List<Token> tokens, ref int bracketDepth, ref StringBuilder verbatimSb, ref Location verbatimLoc)
         {
             int i = 0;
             int len = line.Length;
@@ -153,21 +172,22 @@ namespace DMToCSharp.Lexer
 
                 if (c == '{' && i + 1 < len && line[i + 1] == '\"')
                 {
-                    int start = i;
                     i += 2;
-                    StringBuilder sb = new StringBuilder();
-                    while (i < len)
+                    int endIdx = line.IndexOf("\"}", i);
+                    if (endIdx != -1)
                     {
-                        if (line[i] == '\"' && i + 1 < len && line[i + 1] == '}')
-                        {
-                            i += 2;
-                            break;
-                        }
-                        sb.Append(line[i]);
-                        i++;
+                        string strContent = line.Substring(i, endIdx - i);
+                        tokens.Add(new Token(TokenType.VerbatimString, strContent, loc, strContent));
+                        i = endIdx + 2;
+                        continue;
                     }
-                    tokens.Add(new Token(TokenType.VerbatimString, sb.ToString(), loc, sb.ToString()));
-                    continue;
+                    else
+                    {
+                        verbatimLoc = loc;
+                        verbatimSb = new StringBuilder();
+                        verbatimSb.AppendLine(line.Substring(i));
+                        break;
+                    }
                 }
 
                 if (c == '\"')

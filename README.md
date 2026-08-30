@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20.NET%20Framework-lightgrey.svg)]()
-[![Test Suite](https://img.shields.io/badge/tests-7%2F7%20passing%20(100%25)-success.svg)]()
+[![Test Suite](https://img.shields.io/badge/tests-10%2F10%20passing%20(100%25)-success.svg)]()
 
 ---
 
@@ -13,6 +13,7 @@
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Key Features](#key-features)
+- [Space Station 13 Runtime Subsystems](#space-station-13-runtime-subsystems)
 - [Installation & Build](#installation--build)
 - [CLI Reference & Usage](#cli-reference--usage)
   - [Compiling DreamMaker to C# (DM -> C#)](#compiling-dreammaker-to-c-dm---c)
@@ -29,7 +30,7 @@
 
 ## Overview
 
-**DMToCSharp** is an end-to-end compiler infrastructure that enables bidirectional source transformation between BYOND DreamMaker (`.dm` / `.dme`) and C# source code (`.cs`). In addition to generating human-readable and idiomatic C# code, the project embeds a fully functional runtime library (`DMRuntime`) that implements DreamMaker's dynamic typing system, prototype-based object hierarchy, memory lifecycle, list operations, built-in procedures, and world simulation loop.
+**DMToCSharp** is an end-to-end compiler infrastructure and runtime engine that enables bidirectional source transformation between BYOND DreamMaker (`.dm` / `.dme`) and C# source code (`.cs`), along with native execution capabilities for complex SS13 (Space Station 13) codebases such as PsychonautStation and /tg/station.
 
 ---
 
@@ -74,11 +75,29 @@ graph TD
 - **Semantic Type Hierarchy (`DMObjectTree`)**:
   - Full support for standard BYOND root types: `/datum`, `/atom`, `/atom/movable`, `/obj`, `/mob`, `/turf`, `/area`, `/client`, `/world`, `/list`.
   - Deep prototype inheritance, variable defaults propagation, procedure overloading, and super calls (`..()`).
-- **High-Performance Runtime Engine**:
-  - `DMValue`: Dynamic variant struct supporting `Null`, `Number`, `String`, `List`, `Object`, `Path`, and `Resource` with implicit conversions and truthy/falsy evaluation semantics.
-  - `DMList`: 1-based indexing, associative key-value mappings, and standard built-in list methods (`len`, `Add`, `Find`, `Cut`, `Copy`).
-  - `DMWorld`: Global world state, dynamic logging, tick lag handling, and stream output redirection (`world << ...`).
-  - `DMBuiltins`: Standard math library (`round`, `abs`, `sqrt`, `min`, `max`, `rand`, `roll`, `prob`), string manipulation (`copytext`, `findtext`, `splittext`, `jointext`, `replacetext`), type reflection (`istype`), and spatial queries (`locate`).
+- **Implicit Return Variable `.` (Dot Return)**:
+  - Native support for BYOND's implicit dot return variable semantics (`. = list()`, `return .`).
+
+---
+
+## Space Station 13 Runtime Subsystems
+
+To empower complete execution of SS13 game code bases (including **PsychonautStation**), DMToCSharp embeds native engine subsystems:
+
+1. **DMM Map Parser & 3D Spatial Grid (`DMMParser`, `DMSpatialGrid`)**:
+   - Parses BYOND `.dmm` map format tile dictionaries and 3D coordinate matrices.
+   - Instantiates `/turf`, `/area`, and `/obj` instances in a 3D coordinate space `(x, y, z)`.
+   - Comprehensive spatial ray-casting: `range()`, `orange()`, `view()`, `oview()`, `locate(x,y,z)`, `get_step()`, `get_dist()`, `get_dir()`, `step()`.
+2. **Master Controller (MC) & Subsystem Engine (`MasterController`, `DMSubsystem`)**:
+   - Manages asynchronous, priority-queued ticking for SS13 subsystems (`SSair`, `SSmachines`, `SSlighting`, `SSmobs`).
+   - Dynamic tick budgeting (`world.fps`, `world.tick_lag`), crash recovery, and runtime diagnostics.
+3. **Rust-g Native & Managed FFI Bridge (`RustGBridge`)**:
+   - C# native fallback and FFI routing for BYOND external library calls (`call_ext` / `rust_g.dll`):
+     - SHA256 / MD5 cryptographic hashing (`rustg_hash_string`, `rustg_hash_file`).
+     - 2D/3D Simplex/Perlin noise algorithms for asteroid and mining map generation (`rustg_noise_2d`).
+     - High-speed JSON validation and formatting (`rustg_json_is_valid`).
+4. **TGUI Web Interface Manager (`TGUIManager`)**:
+   - Manages datum controller state synchronization and WebSocket action handling (`ui_data`, `ui_act`) for modern React-based SS13 interfaces.
 
 ---
 
@@ -291,7 +310,17 @@ opendreampiskonut/
 │   │   ├── DMObject.cs
 │   │   ├── DMWorld.cs
 │   │   ├── DMBuiltins.cs
-│   │   └── DMStandardTypes.cs
+│   │   ├── DMStandardTypes.cs
+│   │   ├── Maps/              # 3D spatial grid, DMM parser, line-of-sight & movement
+│   │   │   ├── DMMParser.cs
+│   │   │   └── DMSpatialGrid.cs
+│   │   ├── MC/                # Master Controller, priority queuing, subsystem ticker
+│   │   │   ├── DMSubsystem.cs
+│   │   │   └── MasterController.cs
+│   │   ├── RustG/             # Rust-g FFI bridge (hashing, 2D/3D noise, JSON)
+│   │   │   └── RustGBridge.cs
+│   │   └── TGUI/              # TGUI datum UI states and WebSocket management
+│   │       └── TGUIManager.cs
 │   └── Program.cs             # Command-line driver and test orchestration
 ├── tests/
 │   ├── dm_to_cs/              # DM -> C# compilation and execution integration tests
@@ -299,7 +328,10 @@ opendreampiskonut/
 │   │   ├── 02_inheritance.dm
 │   │   ├── 03_lists.dm
 │   │   ├── 04_control_flow.dm
-│   │   └── 05_ss13_mini_game.dm
+│   │   ├── 05_ss13_mini_game.dm
+│   │   ├── 06_dmm_map_loading.dm
+│   │   ├── 07_master_controller.dm
+│   │   └── 08_rustg_and_spatial.dm
 │   └── cs_to_dm/              # C# -> DM reverse transpilation tests
 │       ├── 01_classes_and_methods.cs
 │       └── 02_math_and_logic.cs

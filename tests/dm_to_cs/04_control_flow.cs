@@ -17,6 +17,7 @@ namespace DMCompiled
     {
         public static DMValue evaluate_risk(DMValue threat_level = default(DMValue))
         {
+            DMValue __dot = DMValue.Null;
             DMValue __sw_val = threat_level;
             if ((__sw_val == (DMValue)1))
             {
@@ -32,11 +33,12 @@ namespace DMCompiled
                     return (DMValue)"Delta: Self Destruct";
                 }
             }
-            return DMValue.Null;
+            return __dot;
         }
 
         public static DMValue main()
         {
+            DMValue __dot = DMValue.Null;
             DMBuiltins.world_output((DMValue)"=== DM Control Flow Test ===");
             DMValue power = (DMValue)85;
             if ((power > (DMValue)50)) 
@@ -74,7 +76,7 @@ namespace DMCompiled
                 }
             }
             DMBuiltins.world_output((DMValue)"Control flow test completed!");
-            return DMValue.Null;
+            return __dot;
         }
 
     }

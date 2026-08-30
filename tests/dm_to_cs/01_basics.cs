@@ -19,12 +19,14 @@ namespace DMCompiled
     {
         public static DMValue add_numbers(DMValue a = default(DMValue), DMValue b = default(DMValue))
         {
+            DMValue __dot = DMValue.Null;
             return (a + b);
-            return DMValue.Null;
+            return __dot;
         }
 
         public static DMValue main()
         {
+            DMValue __dot = DMValue.Null;
             DMBuiltins.world_output((DMValue)"=== DreamMaker Basics Test ===");
             DMBuiltins.world_output(DMValue.Format("Server: ", GlobalVars.server_name, ", Round: ", GlobalVars.round_id));
             DMValue x = (DMValue)10;
@@ -37,7 +39,7 @@ namespace DMCompiled
             DMValue rounded = DMBuiltins.round(flt, (DMValue)0.01);
             DMBuiltins.world_output(DMValue.Format("PI rounded: ", rounded));
             DMBuiltins.world_output((DMValue)"Basics test completed successfully!");
-            return DMValue.Null;
+            return __dot;
         }
 
     }

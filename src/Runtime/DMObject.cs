@@ -39,9 +39,15 @@ namespace DMToCSharp.Runtime
             contents = new DMList();
         }
 
+        public DMObject InitAndNew(params DMValue[] args)
+        {
+            New(args);
+            return this;
+        }
+
         public virtual DMValue New(params DMValue[] args)
         {
-            return DMValue.Null;
+            return new DMValue(this);
         }
 
         public virtual DMValue Del()

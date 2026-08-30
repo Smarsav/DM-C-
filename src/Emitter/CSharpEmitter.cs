@@ -863,14 +863,14 @@ namespace DMToCSharp.Emitter
                 {
                     className = "DM_" + cp.Path.PathString.TrimStart('/').Replace('/', '_');
                 }
-                return string.Format("(new {0}().New({1}))", className, argList);
+                return string.Format("(new DMValue(new {0}().InitAndNew({1})))", className, argList);
             }
             if (node.TypePath != null)
             {
-                return string.Format("new DMValue(new DMObject().New({0}))", argList);
+                return string.Format("(new DMValue(new DMObject().InitAndNew({0})))", argList);
             }
 
-            return string.Format("(new DMObject().New({0}))", argList);
+            return string.Format("(new DMValue(new DMObject().InitAndNew({0})))", argList);
         }
 
         public string Visit(DMASTTernaryExpression node)
@@ -923,7 +923,7 @@ namespace DMToCSharp.Emitter
         {
             if (node.X != null && node.Y != null && node.Z != null)
             {
-                return string.Format("DMBuiltins.locate({0})", node.X.Accept(this));
+                return string.Format("DMBuiltins.locate({0}, {1}, {2})", node.X.Accept(this), node.Y.Accept(this), node.Z.Accept(this));
             }
             string first = node.TypeOrTag.Accept(this);
             string second = node.InContainer != null ? node.InContainer.Accept(this) : "DMValue.Null";
@@ -944,7 +944,10 @@ namespace DMToCSharp.Emitter
                    name == "ascii2text" || name == "text2ascii" || name == "round" || name == "abs" ||
                    name == "sqrt" || name == "sin" || name == "cos" || name == "min" || name == "max" ||
                    name == "prob" || name == "rand" || name == "roll" || name == "pick" || name == "sleep" ||
-                   name == "spawn" || name == "list" || name == "locate" || name == "initial" || name == "alert";
+                   name == "spawn" || name == "list" || name == "locate" || name == "initial" || name == "alert" ||
+                   name == "range" || name == "orange" || name == "view" || name == "oview" ||
+                   name == "get_dist" || name == "get_dir" || name == "get_step" || name == "step" ||
+                   name == "call_ext" || name == "load_map";
         }
 
         private string GetBinaryOpSymbol(BinaryOperator op)

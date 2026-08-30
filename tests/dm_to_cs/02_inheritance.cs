@@ -17,15 +17,16 @@ namespace DMCompiled
     {
         public static DMValue main()
         {
+            DMValue __dot = DMValue.Null;
             DMBuiltins.world_output((DMValue)"=== DM Inheritance & Polymorphism Test ===");
-            DMValue cap = (new DMObject().New());
+            DMValue cap = (new DMValue(new DMObject().InitAndNew()));
             DMBuiltins.world_output(cap.CallProc("describe", new DMValue[] {  }));
             cap.CallProc("take_damage", new DMValue[] { (DMValue)15 });
             DMValue is_mob = DMBuiltins.istype(cap, new DMValue(new DreamPath("/mob")));
             DMValue is_datum = DMBuiltins.istype(cap, new DMValue(new DreamPath("/datum")));
             DMBuiltins.world_output(DMValue.Format("Is mob: ", is_mob, ", Is datum: ", is_datum));
             DMBuiltins.world_output((DMValue)"Inheritance test completed!");
-            return DMValue.Null;
+            return __dot;
         }
 
     }
@@ -44,16 +45,18 @@ namespace DMCompiled
 
         public virtual DMValue describe()
         {
+            DMValue __dot = DMValue.Null;
             return DMValue.Format("Entity: ", this.GetVar("name"), " (HP: ", this.GetVar("health"), ")");
-            return DMValue.Null;
+            return __dot;
         }
 
         public virtual DMValue take_damage(DMValue amount = default(DMValue))
         {
+            DMValue __dot = DMValue.Null;
             this.SetVar("health", (this.GetVar("health") - amount));
             DMBuiltins.world_output(DMValue.Format(this.GetVar("name"), " takes ", amount, " damage! Remaining: ", this.GetVar("health")));
             return this.GetVar("health");
-            return DMValue.Null;
+            return __dot;
         }
 
     }
@@ -73,16 +76,18 @@ namespace DMCompiled
 
         public virtual DMValue describe()
         {
+            DMValue __dot = DMValue.Null;
             DMValue @base = base.CallProc("describe", new DMValue[] {  });
             return DMValue.Format(@base, " | Job: ", this.GetVar("job"));
-            return DMValue.Null;
+            return __dot;
         }
 
         public virtual DMValue take_damage(DMValue amount = default(DMValue))
         {
+            DMValue __dot = DMValue.Null;
             DMBuiltins.world_output((DMValue)"Human flinches!");
             return base.CallProc("take_damage", new DMValue[] { amount });
-            return DMValue.Null;
+            return __dot;
         }
 
     }
@@ -103,9 +108,10 @@ namespace DMCompiled
 
         public override DMValue describe()
         {
+            DMValue __dot = DMValue.Null;
             DMValue @base = base.describe();
             return DMValue.Format(@base, " | Access: ", this.GetVar("access_level"));
-            return DMValue.Null;
+            return __dot;
         }
 
     }

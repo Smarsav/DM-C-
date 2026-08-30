@@ -54,6 +54,16 @@ namespace DMToCSharp.Runtime
         public bool IsPath { get { return _type == DMValueType.Path; } }
         public bool IsResource { get { return _type == DMValueType.Resource; } }
 
+        public DMValue(bool b) : this()
+        {
+            _type = DMValueType.Number;
+            _num = b ? 1.0 : 0.0;
+            _str = null;
+            _list = null;
+            _obj = null;
+            _path = default(DreamPath);
+        }
+
         public DMValue(double num) : this()
         {
             _type = DMValueType.Number;
@@ -62,6 +72,11 @@ namespace DMToCSharp.Runtime
             _list = null;
             _obj = null;
             _path = default(DreamPath);
+        }
+
+        public int ToNumberAsInt()
+        {
+            return (int)ToNumber();
         }
 
         public DMValue(string str) : this()

@@ -17,14 +17,15 @@ namespace DMCompiled
     {
         public static DMValue main()
         {
+            DMValue __dot = DMValue.Null;
             DMBuiltins.world_output((DMValue)"==================================================");
             DMBuiltins.world_output((DMValue)"    SPACE STATION 13 - COMBAT & INTERACTION DEMO  ");
             DMBuiltins.world_output((DMValue)"==================================================");
-            DMValue security = (new DMObject().New());
+            DMValue security = (new DMValue(new DMObject().InitAndNew()));
             security.SetVar("name", (DMValue)"Officer Johnson");
-            DMValue syndicate = (new DMObject().New());
+            DMValue syndicate = (new DMValue(new DMObject().InitAndNew()));
             syndicate.SetVar("name", (DMValue)"Syndicate Operative");
-            DMValue baton = (new DMObject().New());
+            DMValue baton = (new DMValue(new DMObject().InitAndNew()));
             security.CallProc("equip", new DMValue[] { baton });
             DMBuiltins.world_output((DMValue)"--- Round 1 ---");
             security.CallProc("attack_target", new DMValue[] { syndicate });
@@ -33,7 +34,7 @@ namespace DMCompiled
             DMBuiltins.world_output((DMValue)"--- Round 3 ---");
             syndicate.CallProc("attack_target", new DMValue[] { security });
             DMBuiltins.world_output((DMValue)"=== SS13 Simulation Completed Successfully ===");
-            return DMValue.Null;
+            return __dot;
         }
 
     }
@@ -84,6 +85,7 @@ namespace DMCompiled
 
         public virtual DMValue attack(DMValue target = default(DMValue))
         {
+            DMValue __dot = DMValue.Null;
             if ((this.GetVar("charges") <= (DMValue)0)) 
             {
                 DMBuiltins.world_output(DMValue.Format(this.GetVar("name"), " has no charges left!"));
@@ -93,7 +95,7 @@ namespace DMCompiled
             DMBuiltins.world_output(DMValue.Format("*BZZZT* ", this.GetVar("name"), " zaps ", target.GetVar("name"), "! (", this.GetVar("charges"), " charges left)"));
             target.SetVar("health", (target.GetVar("health") - this.GetVar("damage")));
             return this.GetVar("damage");
-            return DMValue.Null;
+            return __dot;
         }
 
     }
@@ -128,13 +130,15 @@ namespace DMCompiled
 
         public virtual DMValue equip(DMValue new_item = default(DMValue))
         {
+            DMValue __dot = DMValue.Null;
             this.SetVar("equipped_item", new_item);
             DMBuiltins.world_output(DMValue.Format(this.GetVar("name"), " equips ", new_item.GetVar("name"), "."));
-            return DMValue.Null;
+            return __dot;
         }
 
         public virtual DMValue attack_target(DMValue target = default(DMValue))
         {
+            DMValue __dot = DMValue.Null;
             if ((!this.GetVar("equipped_item"))) 
             {
                 DMBuiltins.world_output(DMValue.Format(this.GetVar("name"), " punches ", target.GetVar("name"), " for 5 damage!"));
@@ -152,7 +156,7 @@ namespace DMCompiled
                     target.SetVar("health", (target.GetVar("health") - (DMValue)15));
                 }
             DMBuiltins.world_output(DMValue.Format(target.GetVar("name"), " HP: ", target.GetVar("health"), "/", target.GetVar("max_health")));
-            return DMValue.Null;
+            return __dot;
         }
 
     }
