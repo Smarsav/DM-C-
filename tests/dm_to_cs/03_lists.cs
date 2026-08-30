@@ -31,7 +31,7 @@ namespace DMCompiled
             DMValue found = crew.CallProc("Find", new DMValue[] { (DMValue)"Charlie" });
             DMBuiltins.world_output(DMValue.Format("Index of Charlie: ", found));
             DMValue roles = DMBuiltins.list_init(new object[] { DMBuiltins.list_pair((DMValue)"Alice", (DMValue)"Engineer"), DMBuiltins.list_pair((DMValue)"Bob", (DMValue)"Doctor") });
-            roles[(DMValue)"Charlie"] = (DMValue)"Clown";
+            DMBuiltins.set_index(roles, (DMValue)"Charlie", (DMValue)"Clown");
             DMBuiltins.world_output(DMValue.Format("Charlie's role: ", roles[(DMValue)"Charlie"]));
             DMBuiltins.world_output((DMValue)"Lists test completed!");
             return __dot;

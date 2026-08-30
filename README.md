@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20.NET%20Framework-lightgrey.svg)]()
-[![Test Suite](https://img.shields.io/badge/tests-11%2F11%20passing%20(100%25)-success.svg)]()
+[![Test Suite](https://img.shields.io/badge/tests-13%2F13%20passing%20(100%25)-success.svg)]()
 
 ---
 
@@ -104,6 +104,14 @@ To empower complete execution of SS13 game code bases, DMToCSharp embeds native 
      - High-speed JSON validation and formatting (`rustg_json_is_valid`).
 6. **Live TGUI Web & 2D Interactive Radar (`TGUIManager`, `TGUIHttpServer`)**:
    - Live HTTP/WebSocket server (`http://localhost:8080/`) providing real-time telemetry, bi-directional button actions (`Vent Air`, `Airlocks`), and an interactive 2D Canvas map radar with click-to-inspect tile diagnostics.
+7. **Chemistry & Reagents Synthesis (`ReagentContainer`, `ChemistryRegistry`)**:
+   - Dynamic liquid volume tracking, exothermic synthesis reactions, and pharmacology (Water, Fuel, Plasma, Epinephrine, Morphine, Blood).
+8. **Organism Health & Damage Mechanics (`OrganismHealth`, `BodyPart`)**:
+   - 7 distinct body zones (Head, Chest, Groin, Limbs), 6 damage types (Brute, Burn, Toxin, Oxy, Brain, Stamina), blood circulation and consciousness states.
+9. **12-Slot Inventory & Standard Tool Interactions (`InventorySystem`, `ToolInteractions`)**:
+   - Complete equipment slots (Hands, Belt, Head, Suit, Pockets, ID Card) and realistic tool actions (Crowbar, Welder, Screwdriver, Wrench, Multitool, Wirecutters) for deconstructing/repairing airlocks and structures.
+10. **Multiplayer Client Session & WASD Movement Gateway (`DMClient`, `ClientManager`)**:
+    - Real-time player keyboard input routing (`W/A/S/D`, Arrow keys) with collision detection and live viewport synchronization.
 
 ---
 

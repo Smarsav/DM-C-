@@ -537,5 +537,23 @@ namespace DMToCSharp.Runtime
             DMWorld.Instance.Output(new DMValue(string.Format("[ALERT: {0}] {1}", title.IsNull ? "Alert" : title.AsString, msg.AsString)));
             return btn1.IsNull ? new DMValue("Ok") : btn1;
         }
+
+        public static DMValue set_index(DMValue container, DMValue key, DMValue val)
+        {
+            if (container.Type == DMValueType.List && container.AsList != null)
+            {
+                container.AsList[key] = val;
+            }
+            return val;
+        }
+
+        public static DMValue get_index(DMValue container, DMValue key)
+        {
+            if (container.Type == DMValueType.List && container.AsList != null)
+            {
+                return container.AsList[key];
+            }
+            return DMValue.Null;
+        }
     }
 }

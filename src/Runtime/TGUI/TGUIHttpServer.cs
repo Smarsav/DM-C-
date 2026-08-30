@@ -4,9 +4,14 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
+using DMToCSharp.Core;
 using DMToCSharp.Runtime.Atmos;
+using DMToCSharp.Runtime.Chemistry;
+using DMToCSharp.Runtime.Health;
+using DMToCSharp.Runtime.Items;
 using DMToCSharp.Runtime.Maps;
 using DMToCSharp.Runtime.MC;
+using DMToCSharp.Runtime.Network;
 using DMToCSharp.Runtime.Power;
 
 namespace DMToCSharp.Runtime.TGUI
@@ -23,6 +28,10 @@ namespace DMToCSharp.Runtime.TGUI
         public GasMixture StationAir { get; private set; }
         public APC StationAPC { get; private set; }
         public SMES StationSMES { get; private set; }
+        public OrganismHealth PlayerHealth { get; private set; }
+        public InventorySystem PlayerInventory { get; private set; }
+        public ReagentContainer ChemStation { get; private set; }
+        public DMClient LocalPlayer { get; private set; }
 
         public TGUIHttpServer(int port = 8080)
         {
@@ -32,6 +41,21 @@ namespace DMToCSharp.Runtime.TGUI
             StationAir = GasMixture.CreateStandardStationAir();
             StationAPC = new APC("Bridge", 50000.0);
             StationSMES = new SMES(5000000.0);
+            PlayerHealth = new OrganismHealth(100.0);
+            PlayerInventory = new InventorySystem();
+            ChemStation = new ReagentContainer(100.0);
+            LocalPlayer = ClientManager.DefaultPlayer;
+
+            // Equip default items
+            PlayerInventory.EquipItem(InvSlot.RightHand, new DM_tool(ToolType.Crowbar, "Mechanical Crowbar"));
+            PlayerInventory.EquipItem(InvSlot.LeftHand, new DM_tool(ToolType.Welder, "Industrial Welder"));
+            PlayerInventory.EquipItem(InvSlot.Belt, new DM_tool(ToolType.Screwdriver, "Screwdriver"));
+            PlayerInventory.EquipItem(InvSlot.IdCard, new DM_item("Captain ID Card"));
+
+            // Stock Chemistry Station
+            ChemStation.AddReagent("water", 30.0);
+            ChemStation.AddReagent("welding_fuel", 20.0);
+            ChemStation.AddReagent("epinephrine", 15.0);
 
             // Register in Master Controller
             MasterController.Instance.RegisterSubsystem(SSAir.Instance);
@@ -105,6 +129,10 @@ namespace DMToCSharp.Runtime.TGUI
                 {
                     HandleApiAct(ctx);
                 }
+                else if (url == "/api/player/move")
+                {
+                    HandlePlayerMove(ctx);
+                }
                 else if (url == "/api/map/tiles")
                 {
                     HandleApiMapTiles(ctx);
@@ -123,8 +151,27 @@ namespace DMToCSharp.Runtime.TGUI
             }
         }
 
+        private void HandlePlayerMove(HttpListenerContext ctx)
+        {
+            string dir = ctx.Request.QueryString["dir"] ?? "w";
+            bool moved = LocalPlayer.HandleMovement(dir);
+
+            string json = string.Format("{{\"success\":{0},\"x\":{1},\"y\":{2}}}",
+                moved ? "true" : "false",
+                LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1,
+                LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1);
+
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.OutputStream.Write(data, 0, data.Length);
+            ctx.Response.Close();
+        }
+
         private void HandleApiStatus(HttpListenerContext ctx)
         {
+            int pX = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1;
+            int pY = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1;
+
             string json = string.Format(System.Globalization.CultureInfo.InvariantCulture,
                 "{{" +
                 "\"mc_iteration\": {0}," +
@@ -139,7 +186,14 @@ namespace DMToCSharp.Runtime.TGUI
                 "\"apc_breaker\": {9}," +
                 "\"smes_charge_pct\": {10:F1}," +
                 "\"airlock_open\": {11}," +
-                "\"airlock_bolted\": {12}" +
+                "\"airlock_bolted\": {12}," +
+                "\"player_x\": {13}," +
+                "\"player_y\": {14}," +
+                "\"health_hp\": {15:F0}," +
+                "\"health_max\": {16:F0}," +
+                "\"health_status\": \"{17}\"," +
+                "\"health_blood\": {18:F0}," +
+                "\"active_item\": \"{19}\"" +
                 "}}",
                 MasterController.Instance.CurrentIteration,
                 MasterController.Instance.AverageTickTimeMs,
@@ -153,7 +207,13 @@ namespace DMToCSharp.Runtime.TGUI
                 StationAPC.MainBreaker ? "true" : "false",
                 StationSMES.ChargePercentage,
                 AirlockOpen ? "true" : "false",
-                AirlockBolted ? "true" : "false"
+                AirlockBolted ? "true" : "false",
+                pX, pY,
+                PlayerHealth.CurrentHealth,
+                PlayerHealth.MaxHealth,
+                PlayerHealth.Status,
+                PlayerHealth.BloodVolume,
+                PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "Empty Hand"
             );
 
             byte[] data = Encoding.UTF8.GetBytes(json);
@@ -169,6 +229,9 @@ namespace DMToCSharp.Runtime.TGUI
             int maxY = Math.Min(grid.MaxY > 0 ? grid.MaxY : 16, 20);
             int z = 1;
 
+            int pX = LocalPlayer.Mob != null ? LocalPlayer.Mob.x.ToNumberAsInt() : 1;
+            int pY = LocalPlayer.Mob != null ? LocalPlayer.Mob.y.ToNumberAsInt() : 1;
+
             List<string> tileJsonList = new List<string>();
             for (int y = maxY; y >= 1; y--)
             {
@@ -178,7 +241,7 @@ namespace DMToCSharp.Runtime.TGUI
                     string name = t != null ? t.name.AsString : "space";
                     bool isWall = t != null && (t.density.ToBool() || name.Contains("wall"));
                     bool isAirlock = false;
-                    bool isMob = false;
+                    bool isPlayer = (x == pX && y == pY);
 
                     if (t != null)
                     {
@@ -188,17 +251,17 @@ namespace DMToCSharp.Runtime.TGUI
                             {
                                 string cName = c.AsObject.name.AsString.ToLowerInvariant();
                                 if (cName.Contains("airlock") || cName.Contains("door")) isAirlock = true;
-                                if (c.AsObject is DM_mob || cName.Contains("mob") || cName.Contains("human")) isMob = true;
                             }
                         }
                     }
 
-                    tileJsonList.Add(string.Format("{{\"x\":{0},\"y\":{1},\"name\":\"{2}\",\"wall\":{3},\"door\":{4},\"mob\":{5}}}",
-                        x, y, name, isWall ? "true" : "false", isAirlock ? "true" : "false", isMob ? "true" : "false"));
+                    tileJsonList.Add(string.Format("{{\"x\":{0},\"y\":{1},\"name\":\"{2}\",\"wall\":{3},\"door\":{4},\"player\":{5}}}",
+                        x, y, name, isWall ? "true" : "false", isAirlock ? "true" : "false", isPlayer ? "true" : "false"));
                 }
             }
 
-            string json = string.Format("{{\"width\":{0},\"height\":{1},\"tiles\":[{2}]}}", maxX, maxY, string.Join(",", tileJsonList.ToArray()));
+            string json = string.Format("{{\"width\":{0},\"height\":{1},\"player_x\":{2},\"player_y\":{3},\"tiles\":[{4}]}}",
+                maxX, maxY, pX, pY, string.Join(",", tileJsonList.ToArray()));
             byte[] data = Encoding.UTF8.GetBytes(json);
             ctx.Response.ContentType = "application/json";
             ctx.Response.OutputStream.Write(data, 0, data.Length);
@@ -222,12 +285,26 @@ namespace DMToCSharp.Runtime.TGUI
             }
             else if (action == "vent_air")
             {
-                StationAir.RemoveRatio(0.15); // Vent 15% gas
+                StationAir.RemoveRatio(0.15);
             }
             else if (action == "repressurize")
             {
                 StationAir.AdjustMoles(GasType.Oxygen, 5.0);
                 StationAir.AdjustMoles(GasType.Nitrogen, 18.0);
+            }
+            else if (action == "swap_hands")
+            {
+                PlayerInventory.SwapHands();
+            }
+            else if (action == "apply_medkit")
+            {
+                PlayerHealth.HealDamage(DamageType.Brute, 15.0);
+                PlayerHealth.HealDamage(DamageType.Burn, 15.0);
+            }
+            else if (action == "mix_chem")
+            {
+                ChemStation.AddReagent("oxygen", 10.0);
+                ChemStation.CheckReactions();
             }
 
             HandleApiStatus(ctx);
@@ -240,7 +317,7 @@ namespace DMToCSharp.Runtime.TGUI
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <title>Space Station 13 - TGUI Live Console (.NET Runtime)</title>
+    <title>Space Station 13 - TGUI Live Console & Real-Time Multiplayer</title>
     <link href=""https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap"" rel=""stylesheet"">
     <style>
         :root {
@@ -261,7 +338,7 @@ namespace DMToCSharp.Runtime.TGUI
             background: radial-gradient(circle at top right, #111a2e 0%, var(--bg) 100%);
             color: var(--text);
             min-height: 100vh;
-            padding: 24px;
+            padding: 20px;
         }
         .header {
             display: flex;
@@ -269,7 +346,7 @@ namespace DMToCSharp.Runtime.TGUI
             justify-content: space-between;
             background: var(--panel);
             backdrop-filter: blur(12px);
-            padding: 16px 28px;
+            padding: 16px 24px;
             border-radius: 12px;
             border: 1px solid var(--border);
             margin-bottom: 20px;
@@ -277,7 +354,7 @@ namespace DMToCSharp.Runtime.TGUI
         }
         .logo {
             font-family: 'Orbitron', sans-serif;
-            font-size: 20px;
+            font-size: 19px;
             font-weight: 900;
             letter-spacing: 1.5px;
             color: #60a5fa;
@@ -308,8 +385,8 @@ namespace DMToCSharp.Runtime.TGUI
         @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
             margin-bottom: 20px;
         }
         .card {
@@ -317,7 +394,7 @@ namespace DMToCSharp.Runtime.TGUI
             backdrop-filter: blur(12px);
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 22px;
+            padding: 20px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
@@ -327,10 +404,10 @@ namespace DMToCSharp.Runtime.TGUI
         }
         .card-title {
             font-family: 'Orbitron', sans-serif;
-            font-size: 15px;
+            font-size: 14px;
             letter-spacing: 1px;
             color: #93c5fd;
-            margin-bottom: 18px;
+            margin-bottom: 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -339,39 +416,39 @@ namespace DMToCSharp.Runtime.TGUI
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 0;
+            padding: 8px 0;
             border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .metric-row:last-child { border-bottom: none; }
-        .metric-label { color: var(--text-dim); font-size: 14px; }
-        .metric-val { font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 700; color: #fff; }
+        .metric-label { color: var(--text-dim); font-size: 13px; }
+        .metric-val { font-family: 'Orbitron', monospace; font-size: 15px; font-weight: 700; color: #fff; }
         .bar-container {
             width: 100%;
-            height: 10px;
+            height: 8px;
             background: rgba(255,255,255,0.08);
             border-radius: 6px;
-            margin-top: 8px;
+            margin-top: 6px;
             overflow: hidden;
         }
         .bar-fill {
             height: 100%;
             background: linear-gradient(90deg, #3b82f6, #60a5fa);
             border-radius: 6px;
-            transition: width 0.4s ease;
+            transition: width 0.3s ease;
         }
         .btn-group {
             display: flex;
-            gap: 10px;
-            margin-top: 18px;
+            gap: 8px;
+            margin-top: 14px;
         }
         .btn {
             flex: 1;
-            padding: 10px 14px;
-            border-radius: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
             border: 1px solid var(--border);
             background: rgba(30, 58, 138, 0.3);
             color: #bfdbfe;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -397,14 +474,14 @@ namespace DMToCSharp.Runtime.TGUI
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 22px;
+            padding: 20px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
         }
         .canvas-wrapper {
             display: flex;
             gap: 20px;
             align-items: flex-start;
-            margin-top: 16px;
+            margin-top: 14px;
         }
         #stationCanvas {
             background: #020617;
@@ -420,6 +497,15 @@ namespace DMToCSharp.Runtime.TGUI
             border-radius: 8px;
             padding: 16px;
         }
+        .controls-hint {
+            margin-top: 10px;
+            padding: 8px 12px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 6px;
+            font-size: 12px;
+            color: #93c5fd;
+        }
     </style>
 </head>
 <body>
@@ -429,11 +515,36 @@ namespace DMToCSharp.Runtime.TGUI
         </div>
         <div class=""status-badge"">
             <div class=""status-dot""></div>
-            <span>.NET CORE RUNTIME ACTIVE</span>
+            <span>MULTIPLAYER .NET RUNTIME ACTIVE</span>
         </div>
     </div>
 
     <div class=""grid"">
+        <!-- PLAYER & HEALTH HUD -->
+        <div class=""card"">
+            <div class=""card-title"">
+                <span>PLAYER STATUS & HEALTH</span>
+                <span style=""font-size:12px; color:#10b981;"" id=""val-health-status"">HEALTHY</span>
+            </div>
+            <div class=""metric-row"">
+                <span class=""metric-label"">Health Points (HP)</span>
+                <span class=""metric-val"" id=""val-hp"">100 / 100</span>
+            </div>
+            <div class=""bar-container""><div class=""bar-fill"" id=""bar-hp"" style=""width: 100%; background:linear-gradient(90deg, #10b981, #34d399);""></div></div>
+            <div class=""metric-row"" style=""margin-top:8px;"">
+                <span class=""metric-label"">Blood Volume</span>
+                <span class=""metric-val"" id=""val-blood"">560 ml</span>
+            </div>
+            <div class=""metric-row"">
+                <span class=""metric-label"">Active Hand Item</span>
+                <span class=""metric-val"" id=""val-item"" style=""color:#60a5fa; font-size:13px;"">Mechanical Crowbar</span>
+            </div>
+            <div class=""btn-group"">
+                <button class=""btn"" onclick=""sendAct('swap_hands')"">Swap Hands</button>
+                <button class=""btn"" onclick=""sendAct('apply_medkit')"">Use Medkit</button>
+            </div>
+        </div>
+
         <!-- ATMOSPHERICS CARD -->
         <div class=""card"">
             <div class=""card-title"">
@@ -449,12 +560,8 @@ namespace DMToCSharp.Runtime.TGUI
                 <span class=""metric-val"" id=""val-temp"">20.0 °C</span>
             </div>
             <div class=""metric-row"">
-                <span class=""metric-label"">Oxygen (O2)</span>
-                <span class=""metric-val"" id=""val-o2"">21.8 mol</span>
-            </div>
-            <div class=""metric-row"">
-                <span class=""metric-label"">Nitrogen (N2)</span>
-                <span class=""metric-val"" id=""val-n2"">82.2 mol</span>
+                <span class=""metric-label"">O2 / N2 Content</span>
+                <span class=""metric-val"" id=""val-gases"" style=""font-size:13px;"">21.8 / 82.2 mol</span>
             </div>
             <div class=""btn-group"">
                 <button class=""btn"" onclick=""sendAct('repressurize')"">Repressurize</button>
@@ -462,71 +569,54 @@ namespace DMToCSharp.Runtime.TGUI
             </div>
         </div>
 
-        <!-- POWER GRID CARD -->
+        <!-- POWER & AIRLOCK CARD -->
         <div class=""card"">
             <div class=""card-title"">
-                <span>POWERNET (SSpower)</span>
-                <span style=""font-size:12px; color:#f59e0b;"">APC & SMES</span>
+                <span>POWER & ACCESS</span>
+                <span style=""font-size:12px; color:#f59e0b;"">APC & AIRLOCK</span>
             </div>
             <div class=""metric-row"">
                 <span class=""metric-label"">Bridge APC Battery</span>
                 <span class=""metric-val"" id=""val-apc-pct"">100.0%</span>
             </div>
             <div class=""bar-container""><div class=""bar-fill"" id=""bar-apc"" style=""width: 100%;""></div></div>
-            <div class=""metric-row"" style=""margin-top:10px;"">
-                <span class=""metric-label"">Main SMES Grid Storage</span>
-                <span class=""metric-val"" id=""val-smes-pct"">80.0%</span>
-            </div>
-            <div class=""bar-container""><div class=""bar-fill"" id=""bar-smes"" style=""width: 80%; background:linear-gradient(90deg, #f59e0b, #fbbf24);""></div></div>
-            <div class=""metric-row"" style=""margin-top:10px;"">
-                <span class=""metric-label"">Active Equipment Load</span>
-                <span class=""metric-val"" id=""val-load"">2200 W</span>
-            </div>
-            <div class=""btn-group"">
-                <button class=""btn"" onclick=""sendAct('toggle_breaker')"">Toggle Main Breaker</button>
-            </div>
-        </div>
-
-        <!-- AIRLOCK & SECURITY CARD -->
-        <div class=""card"">
-            <div class=""card-title"">
-                <span>AIRLOCK ACCESS</span>
-                <span style=""font-size:12px; color:#10b981;"">BRIDGE-01</span>
-            </div>
-            <div class=""metric-row"">
+            <div class=""metric-row"" style=""margin-top:8px;"">
                 <span class=""metric-label"">Door Status</span>
                 <span class=""metric-val"" id=""val-door"" style=""color:#10b981;"">CLOSED</span>
             </div>
-            <div class=""metric-row"">
-                <span class=""metric-label"">Safety Bolts</span>
-                <span class=""metric-val"" id=""val-bolts"">DISENGAGED</span>
-            </div>
-            <div class=""metric-row"">
-                <span class=""metric-label"">Master Controller Iteration</span>
-                <span class=""metric-val"" id=""val-mc"">0</span>
-            </div>
             <div class=""btn-group"">
-                <button class=""btn"" onclick=""sendAct('toggle_airlock')"">Toggle Open/Close</button>
-                <button class=""btn btn-danger"" onclick=""sendAct('toggle_bolt')"">Toggle Bolts</button>
+                <button class=""btn"" onclick=""sendAct('toggle_airlock')"">Toggle Door</button>
+                <button class=""btn btn-danger"" onclick=""sendAct('toggle_bolt')"">Bolts</button>
             </div>
         </div>
     </div>
 
-    <!-- 2D INTERACTIVE RADAR SECTION -->
+    <!-- 2D INTERACTIVE RADAR & PLAYER CANVAS -->
     <div class=""radar-section"">
         <div class=""card-title"">
-            <span>2D STATION RADAR & MAP GRID (Live Engine Canvas)</span>
-            <span style=""font-size:12px; color:#10b981;"">CLICK TILE TO INSPECT</span>
+            <span>2D STATION RADAR (LIVE WASD / ARROW CONTROLS)</span>
+            <span style=""font-size:12px; color:#38bdf8;"" id=""player-pos-badge"">PLAYER: (2, 2, 1)</span>
         </div>
         <div class=""canvas-wrapper"">
-            <canvas id=""stationCanvas"" width=""480"" height=""480""></canvas>
+            <div>
+                <canvas id=""stationCanvas"" width=""480"" height=""480"" tabindex=""1""></canvas>
+                <div class=""controls-hint"">
+                    🎮 <strong>Live Keyboard Controls:</strong> Use <strong>W / A / S / D</strong> or <strong>Arrow Keys</strong> to move your avatar in real-time across the station grid.
+                </div>
+            </div>
             <div class=""tile-inspector"">
-                <h4 style=""color:#60a5fa; font-family:'Orbitron',sans-serif; margin-bottom:12px;"">Tile Telemetry</h4>
-                <div class=""metric-row""><span class=""metric-label"">Coordinate</span><span class=""metric-val"" id=""inspect-coord"">(1, 1, 1)</span></div>
+                <h4 style=""color:#60a5fa; font-family:'Orbitron',sans-serif; margin-bottom:12px;"">Tile & Target Telemetry</h4>
+                <div class=""metric-row""><span class=""metric-label"">Clicked Coordinate</span><span class=""metric-val"" id=""inspect-coord"">(1, 1, 1)</span></div>
                 <div class=""metric-row""><span class=""metric-label"">Turf Name</span><span class=""metric-val"" id=""inspect-turf"">Floor</span></div>
                 <div class=""metric-row""><span class=""metric-label"">Density / Passable</span><span class=""metric-val"" id=""inspect-density"">Passable</span></div>
-                <div class=""metric-row""><span class=""metric-label"">Contents</span><span class=""metric-val"" id=""inspect-contents"" style=""font-size:14px; color:#10b981;"">None</span></div>
-                <p style=""margin-top:14px; font-size:12px; color:var(--text-dim);"">Legend: <span style=""color:#475569;"">■ Wall</span> | <span style=""color:#1e3a8a;"">■ Floor</span> | <span style=""color:#f59e0b;"">■ Airlock</span> | <span style=""color:#10b981;"">● Mob</span></p>
+                <div class=""metric-row""><span class=""metric-label"">Contents</span><span class=""metric-val"" id=""inspect-contents"" style=""font-size:13px; color:#10b981;"">None</span></div>
+                
+                <h4 style=""color:#93c5fd; font-family:'Orbitron',sans-serif; margin-top:16px; margin-bottom:8px; font-size:13px;"">Chemistry Synthesis</h4>
+                <div class=""btn-group"" style=""margin-top:0;"">
+                    <button class=""btn"" onclick=""sendAct('mix_chem')"">Mix Reagents</button>
+                </div>
+                
+                <p style=""margin-top:14px; font-size:11px; color:var(--text-dim);"">Legend: <span style=""color:#475569;"">■ Wall</span> | <span style=""color:#1e3a8a;"">■ Floor</span> | <span style=""color:#f59e0b;"">■ Airlock</span> | <span style=""color:#38bdf8;"">● Player</span></p>
             </div>
         </div>
     </div>
@@ -542,24 +632,21 @@ namespace DMToCSharp.Runtime.TGUI
                 const data = await res.json();
                 document.getElementById('val-pressure').innerText = data.air_pressure.toFixed(1) + ' kPa';
                 document.getElementById('val-temp').innerText = data.air_temp_c.toFixed(1) + ' °C';
-                document.getElementById('val-o2').innerText = data.air_o2.toFixed(1) + ' mol';
-                document.getElementById('val-n2').innerText = data.air_n2.toFixed(1) + ' mol';
+                document.getElementById('val-gases').innerText = data.air_o2.toFixed(1) + ' / ' + data.air_n2.toFixed(1) + ' mol';
 
                 document.getElementById('val-apc-pct').innerText = data.apc_charge_pct.toFixed(1) + '%';
                 document.getElementById('bar-apc').style.width = data.apc_charge_pct + '%';
-                document.getElementById('val-smes-pct').innerText = data.smes_charge_pct.toFixed(1) + '%';
-                document.getElementById('bar-smes').style.width = data.smes_charge_pct + '%';
-                document.getElementById('val-load').innerText = data.apc_load_w + ' W';
+
+                document.getElementById('val-hp').innerText = data.health_hp + ' / ' + data.health_max;
+                document.getElementById('bar-hp').style.width = ((data.health_hp / data.health_max) * 100) + '%';
+                document.getElementById('val-health-status').innerText = data.health_status.toUpperCase();
+                document.getElementById('val-blood').innerText = data.health_blood + ' ml';
+                document.getElementById('val-item').innerText = data.active_item;
+                document.getElementById('player-pos-badge').innerText = 'PLAYER: (' + data.player_x + ', ' + data.player_y + ', 1)';
 
                 const door = document.getElementById('val-door');
                 door.innerText = data.airlock_open ? 'OPEN' : 'CLOSED';
                 door.style.color = data.airlock_open ? '#f59e0b' : '#10b981';
-
-                const bolts = document.getElementById('val-bolts');
-                bolts.innerText = data.airlock_bolted ? 'ENGAGED' : 'DISENGAGED';
-                bolts.style.color = data.airlock_bolted ? '#ef4444' : '#94a3b8';
-
-                document.getElementById('val-mc').innerText = '#' + data.mc_iteration;
             } catch(e) { }
         }
 
@@ -589,14 +676,31 @@ namespace DMToCSharp.Runtime.TGUI
                 }
                 ctx.fillRect(px, py, tileSize - 1, tileSize - 1);
 
-                if (tile.mob) {
-                    ctx.fillStyle = '#10b981';
+                if (tile.player) {
+                    ctx.fillStyle = '#38bdf8';
                     ctx.beginPath();
-                    ctx.arc(px + tileSize/2, py + tileSize/2, tileSize/3, 0, Math.PI*2);
+                    ctx.arc(px + tileSize/2, py + tileSize/2, tileSize/2.6, 0, Math.PI*2);
                     ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
                 }
             });
         }
+
+        async function movePlayer(dir) {
+            await fetch('/api/player/move?dir=' + dir);
+            await fetchMap();
+            fetchStatus();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'arrowup') { e.preventDefault(); movePlayer('w'); }
+            else if (key === 's' || key === 'arrowdown') { e.preventDefault(); movePlayer('s'); }
+            else if (key === 'a' || key === 'arrowleft') { e.preventDefault(); movePlayer('a'); }
+            else if (key === 'd' || key === 'arrowright') { e.preventDefault(); movePlayer('d'); }
+        });
 
         canvas.addEventListener('click', (e) => {
             if (!mapData) return;
@@ -613,16 +717,18 @@ namespace DMToCSharp.Runtime.TGUI
                 document.getElementById('inspect-coord').innerText = '(' + clicked.x + ', ' + clicked.y + ', 1)';
                 document.getElementById('inspect-turf').innerText = clicked.name;
                 document.getElementById('inspect-density').innerText = clicked.wall ? 'Impassable Wall' : 'Passable';
-                document.getElementById('inspect-contents').innerText = clicked.door ? 'Airlock Door' : (clicked.mob ? 'Living Crew/Mob' : 'None');
+                document.getElementById('inspect-contents').innerText = clicked.door ? 'Airlock Door' : (clicked.player ? 'Player Avatar' : 'None');
             }
         });
 
         async function sendAct(action) {
             await fetch('/api/act?action=' + action);
             fetchStatus();
+            fetchMap();
         }
 
         setInterval(fetchStatus, 500);
+        setInterval(fetchMap, 1000);
         fetchStatus();
         fetchMap();
     </script>

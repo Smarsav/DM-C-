@@ -713,6 +713,21 @@ namespace DMToCSharp.Emitter
 
         public string Visit(DMASTAssignExpression node)
         {
+            if (node.Left is DMASTIndexAccessExpression)
+            {
+                DMASTIndexAccessExpression idx = (DMASTIndexAccessExpression)node.Left;
+                string target = idx.Target.Accept(this);
+                string index = idx.Index.Accept(this);
+                string rightVal = node.Right.Accept(this);
+
+                if (node.Operator == AssignmentOperator.Assign)
+                    return string.Format("DMBuiltins.set_index({0}, {1}, {2})", target, index, rightVal);
+                if (node.Operator == AssignmentOperator.AddAssign)
+                    return string.Format("DMBuiltins.set_index({0}, {1}, (DMBuiltins.get_index({0}, {1}) + {2}))", target, index, rightVal);
+                if (node.Operator == AssignmentOperator.SubtractAssign)
+                    return string.Format("DMBuiltins.set_index({0}, {1}, (DMBuiltins.get_index({0}, {1}) - {2}))", target, index, rightVal);
+            }
+
             if (node.Left is DMASTMemberAccessExpression)
             {
                 DMASTMemberAccessExpression mem = (DMASTMemberAccessExpression)node.Left;
