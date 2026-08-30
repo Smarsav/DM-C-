@@ -13,6 +13,7 @@ using DMToCSharp.Runtime.Maps;
 using DMToCSharp.Runtime.MC;
 using DMToCSharp.Runtime.Network;
 using DMToCSharp.Runtime.Power;
+using DMToCSharp.Runtime.Radio;
 
 namespace DMToCSharp.Runtime.TGUI
 {
@@ -60,8 +61,14 @@ namespace DMToCSharp.Runtime.TGUI
             // Register in Master Controller
             MasterController.Instance.RegisterSubsystem(SSAir.Instance);
             MasterController.Instance.RegisterSubsystem(SSPower.Instance);
+            MasterController.Instance.RegisterSubsystem(SSRadio.Instance);
             SSPower.Instance.RegisterAPC(StationAPC);
             SSPower.Instance.RegisterSMES(StationSMES);
+
+            // Broadcast initial station messages
+            SSRadio.Instance.Broadcast("Station AI", "AI", SSRadio.FREQ_COMMON, "Welcome to Space Station 13 (.NET Runtime). Systems nominal.");
+            SSRadio.Instance.Broadcast("Chief Medical Officer", "Medical", SSRadio.FREQ_MEDICAL, "Medbay triage active and stocked.");
+            SSRadio.Instance.Broadcast("Head of Security", "Security", SSRadio.FREQ_SECURITY, "Station security level set to Code Green.");
         }
 
         public void Start()
@@ -137,6 +144,14 @@ namespace DMToCSharp.Runtime.TGUI
                 {
                     HandleApiMapTiles(ctx);
                 }
+                else if (url == "/api/radio/messages")
+                {
+                    HandleRadioMessages(ctx);
+                }
+                else if (url == "/api/radio/send")
+                {
+                    HandleRadioSend(ctx);
+                }
                 else
                 {
                     HandleIndexHtml(ctx);
@@ -149,6 +164,40 @@ namespace DMToCSharp.Runtime.TGUI
                 ctx.Response.OutputStream.Write(err, 0, err.Length);
                 ctx.Response.Close();
             }
+        }
+
+        private void HandleRadioMessages(HttpListenerContext ctx)
+        {
+            var msgs = SSRadio.Instance.GetRecentMessages(30);
+            List<string> jsonMsgs = new List<string>();
+            foreach (var m in msgs)
+            {
+                jsonMsgs.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{{\"sender\":\"{0}\",\"job\":\"{1}\",\"freq\":{2:F1},\"channel\":\"{3}\",\"text\":\"{4}\",\"time\":\"{5:HH:mm:ss}\"}}",
+                    m.SenderName.Replace("\"", "\\\""),
+                    m.JobTitle.Replace("\"", "\\\""),
+                    m.Frequency,
+                    m.ChannelName,
+                    m.Content.Replace("\"", "\\\""),
+                    m.Timestamp));
+            }
+
+            string json = string.Format("[{0}]", string.Join(",", jsonMsgs.ToArray()));
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.OutputStream.Write(data, 0, data.Length);
+            ctx.Response.Close();
+        }
+
+        private void HandleRadioSend(HttpListenerContext ctx)
+        {
+            string sender = ctx.Request.QueryString["sender"] ?? "Captain";
+            string text = ctx.Request.QueryString["text"] ?? "Hello Station";
+            double freq = 145.9;
+            if (ctx.Request.QueryString["freq"] != null) double.TryParse(ctx.Request.QueryString["freq"], out freq);
+
+            SSRadio.Instance.Broadcast(sender, "Command", freq, text);
+            HandleRadioMessages(ctx);
         }
 
         private void HandlePlayerMove(HttpListenerContext ctx)
@@ -193,7 +242,8 @@ namespace DMToCSharp.Runtime.TGUI
                 "\"health_max\": {16:F0}," +
                 "\"health_status\": \"{17}\"," +
                 "\"health_blood\": {18:F0}," +
-                "\"active_item\": \"{19}\"" +
+                "\"active_item\": \"{19}\"," +
+                "\"radio_transmissions\": {20}" +
                 "}}",
                 MasterController.Instance.CurrentIteration,
                 MasterController.Instance.AverageTickTimeMs,
@@ -213,7 +263,8 @@ namespace DMToCSharp.Runtime.TGUI
                 PlayerHealth.MaxHealth,
                 PlayerHealth.Status,
                 PlayerHealth.BloodVolume,
-                PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "Empty Hand"
+                PlayerInventory.GetActiveHandItem() != null ? PlayerInventory.GetActiveHandItem().name.AsString : "Empty Hand",
+                SSRadio.Instance.TotalTransmissions
             );
 
             byte[] data = Encoding.UTF8.GetBytes(json);
@@ -317,7 +368,7 @@ namespace DMToCSharp.Runtime.TGUI
 <head>
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-    <title>Space Station 13 - TGUI Live Console & Real-Time Multiplayer</title>
+    <title>Space Station 13 - TGUI Live Console & Telecomms</title>
     <link href=""https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap"" rel=""stylesheet"">
     <style>
         :root {
@@ -476,6 +527,7 @@ namespace DMToCSharp.Runtime.TGUI
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
         }
         .canvas-wrapper {
             display: flex;
@@ -505,6 +557,56 @@ namespace DMToCSharp.Runtime.TGUI
             border-radius: 6px;
             font-size: 12px;
             color: #93c5fd;
+        }
+
+        /* TELECOMMS CHAT STYLES */
+        .chat-section {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .chat-box {
+            height: 180px;
+            background: #020617;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .chat-msg {
+            line-height: 1.4;
+        }
+        .chat-channel { font-weight: bold; color: #60a5fa; }
+        .chat-sender { font-weight: bold; color: #34d399; }
+        .chat-input-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .chat-input {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: #fff;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+        .freq-select {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: #60a5fa;
+            padding: 0 12px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 13px;
         }
     </style>
 </head>
@@ -595,7 +697,7 @@ namespace DMToCSharp.Runtime.TGUI
     <div class=""radar-section"">
         <div class=""card-title"">
             <span>2D STATION RADAR (LIVE WASD / ARROW CONTROLS)</span>
-            <span style=""font-size:12px; color:#38bdf8;"" id=""player-pos-badge"">PLAYER: (2, 2, 1)</span>
+            <span style=""font-size:12px; color:#38bdf8;"">LIVE MULTIPLAYER VIEWPORT</span>
         </div>
         <div class=""canvas-wrapper"">
             <div>
@@ -621,6 +723,27 @@ namespace DMToCSharp.Runtime.TGUI
         </div>
     </div>
 
+    <!-- TELECOMMS & RADIO CHAT SECTION -->
+    <div class=""chat-section"">
+        <div class=""card-title"">
+            <span>TELECOMMS & RADIO TRANSCEIVER (SSradio)</span>
+            <span style=""font-size:12px; color:#34d399;"" id=""radio-count"">3 TRANSMISSIONS</span>
+        </div>
+        <div class=""chat-box"" id=""chat-history""></div>
+        <div class=""chat-input-row"">
+            <select class=""freq-select"" id=""freq-select"">
+                <option value=""145.9"">145.9 Common</option>
+                <option value=""135.3"">135.3 Command</option>
+                <option value=""135.9"">135.9 Security</option>
+                <option value=""135.5"">135.5 Medical</option>
+                <option value=""135.7"">135.7 Engineering</option>
+                <option value=""135.1"">135.1 Science</option>
+            </select>
+            <input type=""text"" class=""chat-input"" id=""chat-text"" placeholder=""Transmit radio message to channel... (Press Enter)"" onkeydown=""if(event.key==='Enter') sendRadioMsg()"">
+            <button class=""btn"" style=""flex:0 0 100px;"" onclick=""sendRadioMsg()"">Send</button>
+        </div>
+    </div>
+
     <script>
         let mapData = null;
         const canvas = document.getElementById('stationCanvas');
@@ -642,7 +765,7 @@ namespace DMToCSharp.Runtime.TGUI
                 document.getElementById('val-health-status').innerText = data.health_status.toUpperCase();
                 document.getElementById('val-blood').innerText = data.health_blood + ' ml';
                 document.getElementById('val-item').innerText = data.active_item;
-                document.getElementById('player-pos-badge').innerText = 'PLAYER: (' + data.player_x + ', ' + data.player_y + ', 1)';
+                document.getElementById('radio-count').innerText = data.radio_transmissions + ' TRANSMISSIONS';
 
                 const door = document.getElementById('val-door');
                 door.innerText = data.airlock_open ? 'OPEN' : 'CLOSED';
@@ -656,6 +779,33 @@ namespace DMToCSharp.Runtime.TGUI
                 mapData = await res.json();
                 renderMap();
             } catch(e) { }
+        }
+
+        async function fetchRadio() {
+            try {
+                const res = await fetch('/api/radio/messages');
+                const msgs = await res.json();
+                const container = document.getElementById('chat-history');
+                container.innerHTML = msgs.map(function(m) {
+                    return '<div class=""chat-msg"">' +
+                        '<span style=""color:#64748b;"">[' + m.time + ']</span> ' +
+                        '<span class=""chat-channel"">[' + m.channel + ' (' + m.freq.toFixed(1) + ')]</span> ' +
+                        '<span class=""chat-sender"">' + m.sender + ' (' + m.job + '):</span> ' +
+                        '<span style=""color:#e2e8f0;"">&quot;' + m.text + '&quot;</span>' +
+                        '</div>';
+                }).join('');
+                container.scrollTop = container.scrollHeight;
+            } catch(e) { }
+        }
+
+        async function sendRadioMsg() {
+            const input = document.getElementById('chat-text');
+            const freq = document.getElementById('freq-select').value;
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            await fetch('/api/radio/send?freq=' + freq + '&text=' + encodeURIComponent(text));
+            fetchRadio();
         }
 
         function renderMap() {
@@ -695,6 +845,7 @@ namespace DMToCSharp.Runtime.TGUI
         }
 
         window.addEventListener('keydown', (e) => {
+            if (document.activeElement === document.getElementById('chat-text')) return;
             const key = e.key.toLowerCase();
             if (key === 'w' || key === 'arrowup') { e.preventDefault(); movePlayer('w'); }
             else if (key === 's' || key === 'arrowdown') { e.preventDefault(); movePlayer('s'); }
@@ -729,8 +880,10 @@ namespace DMToCSharp.Runtime.TGUI
 
         setInterval(fetchStatus, 500);
         setInterval(fetchMap, 1000);
+        setInterval(fetchRadio, 2000);
         fetchStatus();
         fetchMap();
+        fetchRadio();
     </script>
 </body>
 </html>";
