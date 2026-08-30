@@ -1323,6 +1323,7 @@ namespace DMToCSharp.Parser
             if (Match(TokenType.Src)) return new DMASTIdentifier(loc, "src");
             if (Match(TokenType.Args)) return new DMASTIdentifier(loc, "args");
             if (Match(TokenType.World)) return new DMASTIdentifier(loc, "world");
+            if (Match(TokenType.Dot)) return new DMASTIdentifier(loc, ".");
 
             if (Match(TokenType.DotDot))
             {

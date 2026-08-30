@@ -236,6 +236,8 @@ namespace DMToCSharp.Emitter
                 }
             }
 
+            WriteLine("DMValue __dot = DMValue.Null;");
+
             if (proc.Body != null)
             {
                 foreach (var stmt in proc.Body.Statements)
@@ -248,7 +250,7 @@ namespace DMToCSharp.Emitter
                 }
             }
 
-            WriteLine("return DMValue.Null;");
+            WriteLine("return __dot;");
             Unindent();
             WriteLine("}");
             WriteLine();
@@ -563,7 +565,7 @@ namespace DMToCSharp.Emitter
 
         public string Visit(DMASTReturnStatement node)
         {
-            string val = node.Value != null ? node.Value.Accept(this) : "DMValue.Null";
+            string val = node.Value != null ? node.Value.Accept(this) : "__dot";
             return string.Format("return {0};", val);
         }
 
@@ -623,6 +625,7 @@ namespace DMToCSharp.Emitter
         public string Visit(DMASTIdentifier node)
         {
             string id = node.Identifier;
+            if (id == ".") return "__dot";
             if (id == "usr") return "((DMValue)this)";
             if (id == "src") return "((DMValue)this)";
             if (id == "world") return "DMWorld.Instance";
@@ -773,6 +776,11 @@ namespace DMToCSharp.Emitter
             {
                 string target = node.Target.Accept(this);
                 return string.Format("{0}.CallProc(\"{1}\", new DMValue[] {{ {2} }})", target, node.ProcName, argList);
+            }
+
+            if (_currentTypePath == DreamPath.Root)
+            {
+                return string.Format("GlobalProcs.{0}({1})", DreamPath.SanitizeIdentifier(node.ProcName), argList);
             }
 
             if (_objectTree.GlobalProcs.ContainsKey(node.ProcName))
